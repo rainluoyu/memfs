@@ -15,20 +15,20 @@ def main():
     fs = MemFileSystem(
         memory_limit=0.5,
         persist_path="./tmp/memfs_data",
-        storage_mode="temp",
+        storage_mode="persist",
     )
 
     # Write
-    fs.write("virtual/hello.txt", "Hello, World!", priority=5)
+    fs.write("/hello.txt", "Hello, World!", priority=5)
     print("Wrote file")
 
     # Read
-    content = fs.read("virtual/hello.txt")
+    content = fs.read("/hello.txt")
     print(f"Read: {content.decode()}")
 
     # Priority
-    fs.set_priority("virtual/hello.txt", priority=8)
-    print(f"Priority: {fs.get_priority('virtual/hello.txt')}")
+    fs.set_priority("/hello.txt", priority=8)
+    print(f"Priority: {fs.get_priority('/hello.txt')}")
 
     # Stats
     stats = fs.get_stats()
@@ -39,7 +39,7 @@ def main():
     print(f"Swapped: {swapped}")
 
     # Exists
-    print(f"Exists: {fs.exists('virtual/hello.txt')}")
+    print(f"Exists: {fs.exists('/hello.txt')}")
 
     fs.shutdown()
     print("Done!")
