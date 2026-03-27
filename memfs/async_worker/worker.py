@@ -33,7 +33,7 @@ class Task:
     args: tuple
     kwargs: dict
     priority: int = 5
-    created_at: float = None
+    created_at: Optional[float] = None
 
     def __post_init__(self):
         if self.created_at is None:

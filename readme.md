@@ -17,7 +17,6 @@ MemFS 是一个高性能的 Python 内存文件系统，提供虚拟目录结构
 - ⚡ **异步操作** - 基于线程池的异步换入换出，不阻塞主线程
 - 📊 **文件追踪** - 记录每次访问，支持基于使用率的自动优化
 - 🎯 **优先级系统** - 0-10 数值优先级，支持手动和自动调整
-- 📦 **压缩存储** - 支持 gzip/lz4/zstd 三种压缩算法
 - 🔌 **双接口** - 同时提供原生风格和面向对象接口
 
 ## 📦 安装
@@ -39,8 +38,6 @@ pip install -e ".[dev]"
 |------|------|------|
 | Python 3.8+ | 必需 | 最低 Python 版本 |
 | psutil | 可选 | 内存和磁盘监控（推荐） |
-| lz4 | 可选 | 极速压缩算法 |
-| zstandard | 可选 | 高压缩率算法 |
 | pytest | 开发 | 测试框架 |
 
 ## 🚀 快速开始
@@ -51,21 +48,21 @@ pip install -e ".[dev]"
 from memfs import write, read, exists, delete, open
 
 # 写入文件
-write('virtual/hello.txt', 'Hello, World!')
+write('/hello.txt', 'Hello, World!')
 
 # 读取文件
-content = read('virtual/hello.txt')
+content = read('/hello.txt')
 print(content.decode('utf-8'))  # Hello, World!
 
 # 检查存在
-if exists('virtual/hello.txt'):
+if exists('/hello.txt'):
     print("文件存在")
 
 # 使用上下文管理器
-with open('virtual/data.txt', 'w') as f:
+with open('/data.txt', 'w') as f:
     f.write(b'binary data')
 
-with open('virtual/data.txt', 'r') as f:
+with open('/data.txt', 'r') as f:
     data = f.read()
 ```
 
@@ -83,14 +80,14 @@ fs = MemFileSystem(
 )
 
 # 文件操作
-fs.write('virtual/file.txt', 'content', priority=5)
-content = fs.read('virtual/file.txt')
+fs.write('/file.txt', 'content', priority=5)
+content = fs.read('/file.txt')
 
 # 优先级管理
-fs.set_priority('virtual/important.txt', priority=9)
+fs.set_priority('/important.txt', priority=9)
 
 # 预热文件
-task_id = fs.preload('virtual/next_file.txt')
+task_id = fs.preload('/next_file.txt')
 
 # 手动垃圾回收
 swapped = fs.gc(target_usage=0.5)
@@ -151,16 +148,16 @@ from memfs import MemFileSystem
 fs = MemFileSystem()
 
 # 写入时设置优先级
-fs.write('virtual/temp.txt', 'temporary data', priority=1)      # 低优先级
-fs.write('virtual/config.txt', 'config data', priority=5)       # 普通优先级
-fs.write('virtual/core.db', b'important data', priority=9)      # 高优先级
+fs.write('/temp.txt', 'temporary data', priority=1)      # 低优先级
+fs.write('/config.txt', 'config data', priority=5)       # 普通优先级
+fs.write('/core.db', b'important data', priority=9)      # 高优先级
 
 # 动态调整优先级
-fs.set_priority('virtual/temp.txt', priority=3)  # 提升优先级
-fs.set_priority('virtual/core.db', priority=10)  # 锁定文件
+fs.set_priority('/temp.txt', priority=3)  # 提升优先级
+fs.set_priority('/core.db', priority=10)  # 锁定文件
 
 # 获取优先级
-priority = fs.get_priority('virtual/core.db')  # 返回 10
+priority = fs.get_priority('/core.db')  # 返回 10
 ```
 
 ## 📚 API 参考
@@ -172,15 +169,15 @@ priority = fs.get_priority('virtual/core.db')  # 返回 10
 
 ```python
 # 写入
-with fs.open('virtual/test.txt', 'w') as f:
+with fs.open('/test.txt', 'w') as f:
     f.write('hello')
 
 # 读取
-with fs.open('virtual/test.txt', 'r') as f:
+with fs.open('/test.txt', 'r') as f:
     content = f.read()
 
 # 二进制
-with fs.open('virtual/data.bin', 'wb') as f:
+with fs.open('/data.bin', 'wb') as f:
     f.write(b'\x00\x01\x02')
 ```
 
@@ -188,8 +185,8 @@ with fs.open('virtual/data.bin', 'wb') as f:
 读取整个文件内容。
 
 ```python
-data = fs.read('virtual/file.txt')  # 返回 bytes
-text = fs.read('virtual/file.txt').decode('utf-8')
+data = fs.read('/file.txt')  # 返回 bytes
+text = fs.read('/file.txt').decode('utf-8')
 ```
 
 #### `write(path, data, priority=5)`
@@ -197,17 +194,17 @@ text = fs.read('virtual/file.txt').decode('utf-8')
 
 ```python
 # 写入字符串
-fs.write('virtual/file.txt', 'hello world', priority=5)
+fs.write('/file.txt', 'hello world', priority=5)
 
 # 写入字节
-fs.write('virtual/data.bin', b'\x00\x01\x02', priority=5)
+fs.write('/data.bin', b'\x00\x01\x02', priority=5)
 ```
 
 #### `exists(path)`
 检查文件是否存在。
 
 ```python
-if fs.exists('virtual/file.txt'):
+if fs.exists('/file.txt'):
     print("文件存在")
 ```
 
@@ -215,7 +212,7 @@ if fs.exists('virtual/file.txt'):
 删除文件。
 
 ```python
-fs.delete('virtual/file.txt')
+fs.delete('/file.txt')
 ```
 
 ### 目录操作
@@ -224,22 +221,22 @@ fs.delete('virtual/file.txt')
 创建目录。
 
 ```python
-fs.mkdir('virtual/subdir')
-fs.mkdir('virtual/nested/deep/path')  # 自动创建父目录
+fs.mkdir('/subdir')
+fs.mkdir('/nested/deep/path')  # 自动创建父目录
 ```
 
 #### `rmdir(path)`
 删除空目录。
 
 ```python
-fs.rmdir('virtual/empty_dir')
+fs.rmdir('/empty_dir')
 ```
 
-#### `listdir(path='virtual/')`
+#### `listdir(path='/')`
 列出目录内容。
 
 ```python
-items = fs.listdir('virtual/')
+items = fs.listdir('/')
 print(items)  # ['file1.txt', 'subdir', 'file2.txt']
 ```
 
@@ -248,13 +245,13 @@ print(items)  # ['file1.txt', 'subdir', 'file2.txt']
 
 ```python
 # 匹配所有 txt 文件
-txt_files = fs.glob('virtual/*.txt')
+txt_files = fs.glob('/*.txt')
 
 # 递归匹配
-all_py = fs.glob('virtual/**/*.py')
+all_py = fs.glob('/**/*.py')
 
 # 模式匹配
-data_files = fs.glob('virtual/data_*.csv')
+data_files = fs.glob('/data_*.csv')
 ```
 
 ### 高级功能
@@ -263,14 +260,14 @@ data_files = fs.glob('virtual/data_*.csv')
 设置文件优先级。
 
 ```python
-fs.set_priority('virtual/important.txt', priority=9)
+fs.set_priority('/important.txt', priority=9)
 ```
 
 #### `get_priority(path)`
 获取文件优先级。
 
 ```python
-priority = fs.get_priority('virtual/file.txt')
+priority = fs.get_priority('/file.txt')
 ```
 
 #### `preload(path, priority=5)`
@@ -278,7 +275,7 @@ priority = fs.get_priority('virtual/file.txt')
 
 ```python
 # 异步预加载
-task_id = fs.preload('virtual/large_file.bin', priority=7)
+task_id = fs.preload('/large_file.bin', priority=7)
 ```
 
 #### `gc(target_usage=0.5)`
@@ -306,10 +303,10 @@ print(f"换出次数：{stats['cache']['swaps_out']}")
 获取文件详细信息。
 
 ```python
-info = fs.get_file_info('virtual/file.txt')
+info = fs.get_file_info('/file.txt')
 print(info)
 # {
-#     'path': 'virtual/file.txt',
+#     'path': '/file.txt',
 #     'location': 'memory',  # 或 'disk'
 #     'priority': 5,
 #     'size': 1024,
@@ -372,7 +369,7 @@ print(info)
 fs = MemFileSystem(memory_limit=0.3)
 
 # 临时数据处理
-fs.write('virtual/temp/process_1.dat', large_data, priority=2)
+fs.write('/temp/process_1.dat', large_data, priority=2)
 # 内存不足时自动换出
 ```
 
@@ -382,10 +379,10 @@ fs = MemFileSystem(memory_limit=0.5, compression='lz4')
 
 # 缓存热点数据
 def get_data(key):
-    if fs.exists(f'virtual/cache/{key}'):
-        return fs.read(f'virtual/cache/{key}')
+    if fs.exists(f'/cache/{key}'):
+        return fs.read(f'/cache/{key}')
     data = expensive_compute(key)
-    fs.write(f'virtual/cache/{key}', data, priority=7)
+    fs.write(f'/cache/{key}', data, priority=7)
     return data
 ```
 
@@ -395,7 +392,7 @@ fs = MemFileSystem(memory_limit=0.8)
 
 # 处理大文件，自动换出
 for i in range(100):
-    fs.write(f'virtual/batch/file_{i}.bin', generate_data(i), priority=3)
+    fs.write(f'/batch/file_{i}.bin', generate_data(i), priority=3)
     if i % 10 == 0:
         fs.gc(target_usage=0.6)  # 定期 GC
 ```
@@ -406,7 +403,7 @@ fs = MemFileSystem()
 
 # 预加载即将使用的文件
 for next_file in upcoming_files:
-    fs.preload(f'virtual/data/{next_file}', priority=6)
+    fs.preload(f'/data/{next_file}', priority=6)
 
 # 后台加载，使用时已在内存
 ```
@@ -415,7 +412,7 @@ for next_file in upcoming_files:
 
 1. **线程安全**：所有操作都是线程安全的，可以在多线程环境中使用
 2. **资源清理**：使用完毕后调用 `shutdown()` 或 `close()` 释放资源
-3. **路径格式**：所有路径以 `virtual/` 为根目录
+3. **路径格式**：所有路径以 `/` 为根目录
 4. **内存限制**：合理设置 `memory_limit`，避免占用过多系统内存
 5. **压缩选择**：
    - `gzip`：平衡性能和压缩率（推荐）

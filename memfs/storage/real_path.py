@@ -24,7 +24,6 @@ class RealPathStorage:
         self,
         real_root: str,
         temp_mode: bool = True,
-        compress_memory: bool = True,
     ):
         """
         Initialize real path storage.
@@ -32,11 +31,9 @@ class RealPathStorage:
         Args:
             real_root: Root directory for real files.
             temp_mode: If True, cleanup directory on shutdown.
-            compress_memory: If True, compress data in memory.
         """
         self.real_root = Path(real_root).expanduser().resolve()
         self.temp_mode = temp_mode
-        self.compress_memory = compress_memory
 
         self._lock = threading.Lock()
         self._file_info: Dict[str, dict] = {}  # Cache file info (mtime, size)
@@ -86,12 +83,12 @@ class RealPathStorage:
         Convert virtual path to real path.
 
         Args:
-            virtual_path: Virtual path (e.g., "虚拟/test.txt")
+            virtual_path: Virtual path (e.g., "/test.txt")
 
         Returns:
             Real filesystem path.
         """
-        if virtual_path.startswith("虚拟/"):
+        if virtual_path.startswith("/"):
             relative_path = virtual_path[3:]
         else:
             relative_path = virtual_path
@@ -110,7 +107,7 @@ class RealPathStorage:
         """
         try:
             relative_path = real_path.relative_to(self.real_root)
-            return "虚拟/" + str(relative_path).replace("\\", "/")
+            return "/" + str(relative_path).replace("\\", "/")
         except ValueError:
             return str(real_path)
 

@@ -102,7 +102,7 @@ def open(path: str, mode: str = "rb", priority: int = 5):
     Open a file in the virtual filesystem.
 
     Args:
-        path: File path (e.g., '虚拟/data.txt').
+        path: File path (e.g., '/data.txt').
         mode: File mode ('r', 'w', 'a', 'rb', 'wb', 'ab').
         priority: File priority (0-10, higher = keep in memory longer).
 
@@ -110,9 +110,9 @@ def open(path: str, mode: str = "rb", priority: int = 5):
         VirtualFile instance.
 
     Example:
-        >>> with open('虚拟/data.txt', 'w') as f:
+        >>> with open('/data.txt', 'w') as f:
         ...     f.write(b'hello')
-        >>> with open('虚拟/data.txt', 'r') as f:
+        >>> with open('/data.txt', 'r') as f:
         ...     data = f.read()
     """
     return _get_fs().open(path, mode, priority)
@@ -130,7 +130,7 @@ def read(path: str, priority: Optional[int] = None) -> bytes:
         File contents.
 
     Example:
-        >>> data = read('虚拟/data.txt')
+        >>> data = read('/data.txt')
     """
     return _get_fs().read(path, priority)
 
@@ -148,7 +148,7 @@ def write(path: str, data: Union[bytes, str], priority: int = 5) -> int:
         Number of bytes written.
 
     Example:
-        >>> write('虚拟/data.txt', b'hello')
+        >>> write('/data.txt', b'hello')
         5
     """
     return _get_fs().write(path, data, priority)
@@ -206,7 +206,7 @@ def rmdir(path: str) -> bool:
     return _get_fs().rmdir(path)
 
 
-def listdir(path: str = "虚拟/") -> List[str]:
+def listdir(path: str = "/") -> List[str]:
     """
     List directory contents.
 

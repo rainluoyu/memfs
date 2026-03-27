@@ -15,17 +15,11 @@ from memfs import MemFileSystem, write, read, exists, delete
 from memfs.core.file import VirtualFile
 from memfs.core.directory import VirtualDirectory, DirectoryManager
 from memfs.storage.memory import MemoryManager, MemoryFile
-from memfs.storage.disk import DiskStorage
 from memfs.cache.lfu import LFUCache
 from memfs.cache.priority import PriorityQueue
 from memfs.cache.tracker import AccessTracker, FileAccessRecord
 from memfs.utils.stats import Statistics, MemoryStats, DiskStats
 from memfs.utils.logger import OperationLogger, OperationType, LogEntry
-from memfs.utils.compress import (
-    Compressor,
-    GzipCompressor,
-    CompressionFactory,
-)
 
 
 # =============================================================================
@@ -673,38 +667,6 @@ class TestOperationLogger:
         assert len(logger.get_entries()) == 0
 
 
-# =============================================================================
-# Test Compressor
-# =============================================================================
-
-
-class TestCompressor:
-    """Tests for Compressor classes."""
-
-    def test_gzip_compress_decompress(self):
-        """Test gzip compression and decompression."""
-        compressor = GzipCompressor(level=6)
-        data = b"Hello, World! " * 100
-        compressed = compressor.compress(data)
-        decompressed = compressor.decompress(compressed)
-        assert decompressed == data
-        assert len(compressed) < len(data)
-
-    def test_compression_factory(self):
-        """Test compression factory."""
-        compressor = CompressionFactory.create("gzip", level=6)
-        assert isinstance(compressor, GzipCompressor)
-
-    def test_compression_factory_invalid(self):
-        """Test factory with invalid algorithm."""
-        with pytest.raises(ValueError):
-            CompressionFactory.create("invalid_algorithm")
-
-    def test_get_available_algorithms(self):
-        """Test getting available algorithms."""
-        algorithms = CompressionFactory.get_available_algorithms()
-        assert "gzip" in algorithms
-
 
 # =============================================================================
 # Test VirtualDirectory
@@ -815,71 +777,6 @@ class TestDirectoryManager:
         matches = manager.glob("virtual/test*.txt")
         assert len(matches) == 2
 
-
-# =============================================================================
-# Test DiskStorage
-# =============================================================================
-
-
-class TestDiskStorage:
-    """Tests for DiskStorage class."""
-
-    @pytest.fixture
-    def storage(self, tmp_path):
-        """Create test disk storage."""
-        return DiskStorage(str(tmp_path / "disk_storage"))
-
-    def test_put_get(self, storage):
-        """Test basic put and get."""
-        data = b"Hello, World!"
-        storage.put("file1", data)
-        retrieved = storage.get("file1")
-        assert retrieved == data
-
-    def test_get_nonexistent(self, storage):
-        """Test getting nonexistent file."""
-        assert storage.get("nonexistent") is None
-
-    def test_contains(self, storage):
-        """Test contains check."""
-        storage.put("file1", b"data")
-        assert storage.contains("file1")
-        assert not storage.contains("file2")
-
-    def test_remove(self, storage):
-        """Test file removal."""
-        storage.put("file1", b"data")
-        assert storage.remove("file1")
-        assert not storage.contains("file1")
-
-    def test_update_priority(self, storage):
-        """Test priority update."""
-        storage.put("file1", b"data", priority=5)
-        storage.update_priority("file1", priority=9)
-        metadata = storage.get_metadata("file1")
-        assert metadata["priority"] == 9
-
-    def test_get_metadata(self, storage):
-        """Test getting metadata."""
-        storage.put("file1", b"data", priority=7)
-        metadata = storage.get_metadata("file1")
-        assert metadata["key"] == "file1"
-        assert metadata["priority"] == 7
-        assert metadata["original_size"] == 4
-
-    def test_get_usage(self, storage):
-        """Test getting usage."""
-        storage.put("file1", b"data")
-        usage = storage.get_usage()
-        assert usage["file_count"] == 1
-        assert "total_size" in usage
-
-    def test_clear(self, storage):
-        """Test clearing storage."""
-        storage.put("file1", b"data")
-        storage.put("file2", b"data")
-        storage.clear()
-        assert storage.get_usage()["file_count"] == 0
 
 
 # =============================================================================

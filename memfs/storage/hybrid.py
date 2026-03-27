@@ -31,7 +31,6 @@ class HybridStorage:
         persist_path: str = "./memfs_data",
         persist_mode: bool = False,
         temp_mode: bool = True,
-        compress_memory: bool = True,
         worker_threads: int = 4,
         on_swap: Optional[Callable[[str, str], None]] = None,
     ):
@@ -43,7 +42,6 @@ class HybridStorage:
             persist_path: Root path for real files.
             persist_mode: If True, keep files after shutdown.
             temp_mode: If True, cleanup on shutdown (for non-persist mode).
-            compress_memory: If True, compress data in memory.
             worker_threads: Number of background worker threads.
             on_swap: Callback for swap events (key, direction).
         """
@@ -54,13 +52,11 @@ class HybridStorage:
         self.memory = MemoryManager(
             memory_limit=memory_limit,
             on_eviction=self._on_memory_eviction,
-            compress_data=compress_memory,
         )
 
         self.real_storage = RealPathStorage(
             real_root=persist_path,
             temp_mode=temp_mode and not persist_mode,
-            compress_memory=compress_memory,
         )
 
         self.lock_manager = FileLockManager()

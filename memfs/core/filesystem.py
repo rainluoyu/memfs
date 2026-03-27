@@ -94,7 +94,7 @@ class MemFileSystem:
         Open a file.
 
         Args:
-            path: File path (e.g., '虚拟/data.txt').
+            path: File path (e.g., '/data.txt').
             mode: File mode ('r', 'w', 'a', 'rb', 'wb', 'ab').
             priority: File priority (0-10).
 
@@ -104,8 +104,6 @@ class MemFileSystem:
         if self._closed:
             raise RuntimeError("File system is closed")
 
-        if not path.startswith("虚拟/"):
-            path = "虚拟/" + path
 
         directory, filename = self.directories.resolve_path(path)
 
@@ -153,8 +151,6 @@ class MemFileSystem:
         if self._closed:
             raise RuntimeError("File system is closed")
 
-        if not path.startswith("虚拟/"):
-            path = "虚拟/" + path
 
         start_time = time.time()
 
@@ -195,8 +191,6 @@ class MemFileSystem:
         if isinstance(data, str):
             data = data.encode("utf-8")
 
-        if not path.startswith("虚拟/"):
-            path = "虚拟/" + path
 
         start_time = time.time()
 
@@ -233,8 +227,6 @@ class MemFileSystem:
         if self._closed:
             raise RuntimeError("File system is closed")
 
-        if not path.startswith("虚拟/"):
-            path = "虚拟/" + path
 
         result = self.storage.remove(path)
 
@@ -258,8 +250,6 @@ class MemFileSystem:
         Returns:
             True if exists.
         """
-        if not path.startswith("虚拟/"):
-            path = "虚拟/" + path
 
         return self.storage.contains(path)
 
@@ -273,8 +263,6 @@ class MemFileSystem:
         Returns:
             True if created.
         """
-        if not path.startswith("虚拟/"):
-            path = "虚拟/" + path
 
         result = self.directories.mkdir(path)
 
@@ -293,8 +281,6 @@ class MemFileSystem:
         Returns:
             True if removed.
         """
-        if not path.startswith("虚拟/"):
-            path = "虚拟/" + path
 
         result = self.directories.rmdir(path)
 
@@ -303,7 +289,7 @@ class MemFileSystem:
 
         return result
 
-    def listdir(self, path: str = "虚拟/") -> List[str]:
+    def listdir(self, path: str = "/") -> List[str]:
         """
         List directory contents.
 
@@ -313,8 +299,6 @@ class MemFileSystem:
         Returns:
             List of names.
         """
-        if not path.startswith("虚拟/"):
-            path = "虚拟/" + path
 
         return self.directories.listdir(path)
 
@@ -344,8 +328,6 @@ class MemFileSystem:
         Returns:
             True if set.
         """
-        if not path.startswith("虚拟/"):
-            path = "虚拟/" + path
 
         result = self._set_priority_internal(path, priority)
 
@@ -378,8 +360,6 @@ class MemFileSystem:
         Returns:
             Priority or None.
         """
-        if not path.startswith("虚拟/"):
-            path = "虚拟/" + path
 
         with self._lock:
             return self._file_priorities.get(path)
@@ -395,8 +375,6 @@ class MemFileSystem:
         Returns:
             Task ID.
         """
-        if not path.startswith("虚拟/"):
-            path = "虚拟/" + path
 
         if self.logger:
             self.logger.log(OperationType.PRELOAD, path, priority=priority)
@@ -441,8 +419,6 @@ class MemFileSystem:
         Returns:
             File info or None.
         """
-        if not path.startswith("虚拟/"):
-            path = "虚拟/" + path
 
         location = self.storage.get_file_location(path)
 
