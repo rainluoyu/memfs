@@ -29,8 +29,7 @@ class HybridStorage:
         self,
         memory_limit: float = 0.8,
         persist_path: str = "./memfs_data",
-        persist_mode: bool = False,
-        temp_mode: bool = True,
+        storage_mode: str = "temp",
         worker_threads: int = 4,
         on_swap: Optional[Callable[[str, str], None]] = None,
     ):
@@ -40,23 +39,24 @@ class HybridStorage:
         Args:
             memory_limit: Memory usage limit (0-1).
             persist_path: Root path for real files.
-            persist_mode: If True, keep files after shutdown.
-            temp_mode: If True, cleanup on shutdown (for non-persist mode).
+            storage_mode: Storage mode - "temp" (temporary, cleanup on shutdown) or "persist" (keep files after shutdown).
             worker_threads: Number of background worker threads.
             on_swap: Callback for swap events (key, direction).
         """
         self._lock = threading.Lock()
         self._on_swap = on_swap
-        self.persist_mode = persist_mode
+        self.storage_mode = storage_mode
+        self.persist_mode = storage_mode == "persist"
 
         self.memory = MemoryManager(
             memory_limit=memory_limit,
             on_eviction=self._on_memory_eviction,
         )
 
+        temp_mode = storage_mode == "temp"
         self.real_storage = RealPathStorage(
             real_root=persist_path,
-            temp_mode=temp_mode and not persist_mode,
+            temp_mode=temp_mode,
         )
 
         self.lock_manager = FileLockManager()

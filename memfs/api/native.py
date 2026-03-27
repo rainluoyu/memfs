@@ -16,9 +16,7 @@ _global_fs_config: dict = {}
 def init(
     memory_limit: float = 0.8,
     persist_path: str = "./memfs_data",
-    persist_mode: bool = False,
-    temp_mode: bool = True,
-    compress_memory: bool = True,
+    storage_mode: str = "temp",
     worker_threads: int = 4,
     enable_logging: bool = True,
     log_path: Optional[str] = None,
@@ -30,9 +28,7 @@ def init(
     Args:
         memory_limit: Memory usage limit (0-1).
         persist_path: Root path for real files.
-        persist_mode: If True, keep files after shutdown (persistent mode).
-        temp_mode: If True, use temp directory and cleanup on shutdown.
-        compress_memory: If True, compress data in memory.
+        storage_mode: Storage mode - "temp" (temporary, cleanup on shutdown) or "persist" (keep files after shutdown).
         worker_threads: Number of background worker threads.
         enable_logging: Whether to enable operation logging.
         log_path: Path for operation log file.
@@ -43,7 +39,7 @@ def init(
 
     Example:
         >>> import memfs
-        >>> fs = memfs.init(persist_mode=True, persist_path="./my_data")
+        >>> fs = memfs.init(storage_mode="persist", persist_path="./my_data")
     """
     global _global_fs, _global_fs_config
 
@@ -53,9 +49,7 @@ def init(
     _global_fs_config = {
         "memory_limit": memory_limit,
         "persist_path": persist_path,
-        "persist_mode": persist_mode,
-        "temp_mode": temp_mode,
-        "compress_memory": compress_memory,
+        "storage_mode": storage_mode,
         "worker_threads": worker_threads,
         "enable_logging": enable_logging,
         "log_path": log_path,

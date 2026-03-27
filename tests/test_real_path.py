@@ -167,7 +167,7 @@ class TestPersistModes:
 
     def test_temp_mode_cleanup(self):
         """Test temporary mode cleanup on shutdown."""
-        fs = MemFileSystem(persist_mode=False, temp_mode=True)
+        fs = MemFileSystem(storage_mode="temp")
 
         # Write file
         fs.write("/test.txt", b"temporary data")
@@ -182,9 +182,8 @@ class TestPersistModes:
         """Test persistent mode survives restart."""
         # First instance
         fs1 = MemFileSystem(
-            persist_mode=True,
+            storage_mode="persist",
             persist_path=self.test_dir,
-            temp_mode=False,
         )
         fs1.write("/test.txt", b"persistent data")
         fs1.shutdown(wait=True)
@@ -195,9 +194,8 @@ class TestPersistModes:
 
         # Second instance
         fs2 = MemFileSystem(
-            persist_mode=True,
+            storage_mode="persist",
             persist_path=self.test_dir,
-            temp_mode=False,
         )
 
         # Read data
@@ -216,9 +214,8 @@ class TestPersistModes:
 
         # Create filesystem
         fs = MemFileSystem(
-            persist_mode=True,
+            storage_mode="persist",
             persist_path=self.test_dir,
-            temp_mode=False,
         )
 
         # Read file (should lazy load)
@@ -245,9 +242,8 @@ class TestAsyncWrite:
     def test_async_write_completion(self):
         """Test that async write completes."""
         fs = MemFileSystem(
-            persist_mode=True,
+            storage_mode="persist",
             persist_path=self.test_dir,
-            temp_mode=False,
         )
 
         # Write file
@@ -269,9 +265,8 @@ class TestAsyncWrite:
     def test_write_then_read(self):
         """Test write followed by immediate read."""
         fs = MemFileSystem(
-            persist_mode=True,
+            storage_mode="persist",
             persist_path=self.test_dir,
-            temp_mode=False,
         )
 
         # Write and immediately read
@@ -300,9 +295,8 @@ class TestSwapOut:
     def test_gc_triggers_swap_out(self):
         """Test that GC swaps out low priority files."""
         fs = MemFileSystem(
-            persist_mode=True,
+            storage_mode="persist",
             persist_path=self.test_dir,
-            temp_mode=False,
             memory_limit=0.001,  # Very small limit to force GC
         )
 

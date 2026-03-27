@@ -6,7 +6,6 @@ Main entry point for file system operations.
 import os
 import threading
 import time
-import tempfile
 import shutil
 from typing import Any, BinaryIO, Dict, List, Optional, Union
 from pathlib import Path
@@ -30,8 +29,7 @@ class MemFileSystem:
         self,
         memory_limit: float = 0.8,
         persist_path: str = "./memfs_data",
-        persist_mode: bool = False,
-        temp_mode: bool = True,
+        storage_mode: str = "temp",
         worker_threads: int = 4,
         enable_logging: bool = True,
         log_path: Optional[str] = None,
@@ -43,8 +41,7 @@ class MemFileSystem:
         Args:
             memory_limit: Memory usage limit (0-1).
             persist_path: Root path for real files.
-            persist_mode: If True, keep files after shutdown (persistent mode).
-            temp_mode: If True, use temp directory and cleanup on shutdown.
+            storage_mode: Storage mode - "temp" (temporary, cleanup on shutdown) or "persist" (keep files after shutdown).
             worker_threads: Number of background worker threads.
             enable_logging: Whether to enable operation logging.
             log_path: Path for operation log file.
@@ -52,25 +49,16 @@ class MemFileSystem:
         """
         self._lock = threading.Lock()
         self._closed = False
-        self._persist_mode = persist_mode
-        self._temp_dir: Optional[Path] = None
+        self._storage_mode = storage_mode
+        self._persist_mode = storage_mode == "persist"
 
-        if persist_mode:
-            real_root = Path(persist_path).expanduser().resolve()
-        else:
-            if temp_mode:
-                self._temp_dir = Path(tempfile.mkdtemp(prefix="memfs_"))
-                real_root = self._temp_dir
-            else:
-                real_root = Path(persist_path).expanduser().resolve()
-
+        real_root = Path(persist_path).expanduser().resolve()
         self._persist_path = str(real_root)
 
         self.storage = HybridStorage(
             memory_limit=memory_limit,
             persist_path=str(real_root),
-            persist_mode=persist_mode,
-            temp_mode=temp_mode and not persist_mode,
+            storage_mode=storage_mode,
             worker_threads=worker_threads,
         )
 
@@ -477,12 +465,6 @@ class MemFileSystem:
         """
         self._closed = True
         self.storage.shutdown(wait=wait)
-
-        if self._temp_dir and self._temp_dir.exists():
-            try:
-                shutil.rmtree(self._temp_dir)
-            except Exception:
-                pass
 
     def __enter__(self):
         """Context manager entry."""

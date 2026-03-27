@@ -124,7 +124,8 @@ pytest tests/test_core.py::TestMemFileSystem::test_write_read -v
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
 | `memory_limit` | 0.8 | 内存使用限制 (0-1) |
-| `persist_path` | './memfs_data' | 持久化路径 |
+| `persist_path` | './memfs_data' | 持久化/临时目录路径 |
+| `storage_mode` | 'temp' | 存储模式：'temp'（临时，关闭时清理）或 'persist'（持久化） |
 | `worker_threads` | 4 | 后台工作线程数 |
 | `priority_boost_threshold` | 10 | 自动提升优先级的访问次数 |
 | 路径前缀 | '/' | 虚拟路径根目录（统一使用 Linux 风格路径） |
@@ -138,5 +139,5 @@ pytest tests/test_core.py::TestMemFileSystem::test_write_read -v
 
 ---
 
-**最后更新**：2026-03-27
-**版本**：0.1.0
+**最后更新**：2026-03-27  
+**版本**：0.2.0
