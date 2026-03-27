@@ -29,7 +29,7 @@ class VirtualDirectory:
 
         self._children: Dict[str, "VirtualDirectory"] = {}
         self._files: Set[str] = set()
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
 
     @property
     def path(self) -> str:
@@ -175,7 +175,7 @@ class DirectoryManager:
 
     def __init__(self):
         """Initialize directory manager."""
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._root = VirtualDirectory("")
         self._path_cache: Dict[str, VirtualDirectory] = {"/": self._root}
 
@@ -251,16 +251,22 @@ class DirectoryManager:
         Returns:
             True if exists.
         """
+        # 先检查是否是目录
+        directory = self.get_directory(path)
+        if directory is not None:
+            return True
+        
+        # 再检查是否是文件
         pure_path = PurePosixPath(path)
-
-        if pure_path.name:
-            directory, filename = self.resolve_path(path)
-            if directory:
-                return directory.has_file(filename)
-            return False
-        else:
-            directory = self.get_directory(path)
-            return directory is not None
+        dir_path = str(pure_path.parent)
+        if dir_path == ".":
+            dir_path = "/"
+        
+        parent_dir = self.get_directory(dir_path)
+        if parent_dir:
+            return parent_dir.has_file(pure_path.name)
+        
+        return False
 
     def mkdir(self, path: str) -> bool:
         """

@@ -736,45 +736,45 @@ class TestDirectoryManager:
     def test_get_or_create_directory(self):
         """Test getting or creating directory."""
         manager = DirectoryManager()
-        dir = manager.get_or_create_directory("virtual/subdir")
+        dir = manager.get_or_create_directory("/subdir")
         assert dir is not None
 
     def test_resolve_path(self):
         """Test resolving path."""
         manager = DirectoryManager()
-        directory, filename = manager.resolve_path("virtual/test.txt")
+        directory, filename = manager.resolve_path("/test.txt")
         assert directory is not None
         assert filename == "test.txt"
 
     def test_exists(self):
         """Test exists check."""
         manager = DirectoryManager()
-        manager.get_or_create_directory("virtual/subdir")
-        assert manager.exists("virtual/subdir")
-        assert not manager.exists("virtual/nonexistent")
+        manager.get_or_create_directory("/subdir")
+        assert manager.exists("/subdir")
+        assert not manager.exists("/nonexistent")
 
     def test_mkdir(self):
         """Test creating directory."""
         manager = DirectoryManager()
-        assert manager.mkdir("virtual/newdir")
-        assert manager.exists("virtual/newdir")
+        assert manager.mkdir("/newdir")
+        assert manager.exists("/newdir")
 
     def test_listdir(self):
         """Test listing directory."""
         manager = DirectoryManager()
-        manager.get_or_create_directory("virtual/subdir")
-        items = manager.listdir("virtual/")
+        manager.get_or_create_directory("/subdir")
+        items = manager.listdir("/")
         assert "subdir" in items
 
     def test_glob(self):
         """Test glob matching."""
         manager = DirectoryManager()
-        dir = manager.get_or_create_directory("virtual/")
+        dir = manager.get_or_create_directory("/")
         dir.add_file("test1.txt")
         dir.add_file("test2.txt")
         dir.add_file("other.py")
 
-        matches = manager.glob("virtual/test*.txt")
+        matches = manager.glob("/test*.txt")
         assert len(matches) == 2
 
 
@@ -800,75 +800,75 @@ class TestMemFileSystem:
 
     def test_write_read(self, fs):
         """Test basic write and read."""
-        fs.write("virtual/test.txt", "hello world")
-        content = fs.read("virtual/test.txt")
+        fs.write("/test.txt", "hello world")
+        content = fs.read("/test.txt")
         assert content.decode("utf-8") == "hello world"
 
     def test_write_read_bytes(self, fs):
         """Test binary write and read."""
         data = b"\x00\x01\x02\x03\x04"
-        fs.write("virtual/binary.bin", data)
-        content = fs.read("virtual/binary.bin")
+        fs.write("/binary.bin", data)
+        content = fs.read("/binary.bin")
         assert content == data
 
     def test_write_string_auto_encode(self, fs):
         """Test that strings are automatically encoded."""
-        fs.write("virtual/text.txt", "hello")
-        content = fs.read("virtual/text.txt")
+        fs.write("/text.txt", "hello")
+        content = fs.read("/text.txt")
         assert isinstance(content, bytes)
 
     def test_exists(self, fs):
         """Test exists check."""
-        assert not fs.exists("virtual/nonexistent.txt")
-        fs.write("virtual/existing.txt", "data")
-        assert fs.exists("virtual/existing.txt")
+        assert not fs.exists("/nonexistent.txt")
+        fs.write("/existing.txt", "data")
+        assert fs.exists("/existing.txt")
 
     def test_delete(self, fs):
         """Test file deletion."""
-        fs.write("virtual/to_delete.txt", "data")
-        assert fs.exists("virtual/to_delete.txt")
-        fs.delete("virtual/to_delete.txt")
-        assert not fs.exists("virtual/to_delete.txt")
-        assert not fs.delete("virtual/nonexistent.txt")
+        fs.write("/to_delete.txt", "data")
+        assert fs.exists("/to_delete.txt")
+        fs.delete("/to_delete.txt")
+        assert not fs.exists("/to_delete.txt")
+        assert not fs.delete("/nonexistent.txt")
 
     def test_priority(self, fs):
         """Test priority management."""
-        fs.write("virtual/priority_test.txt", "data", priority=8)
-        assert fs.get_priority("virtual/priority_test.txt") == 8
+        fs.write("/priority_test.txt", "data", priority=8)
+        assert fs.get_priority("/priority_test.txt") == 8
 
-        fs.set_priority("virtual/priority_test.txt", priority=3)
-        assert fs.get_priority("virtual/priority_test.txt") == 3
+        fs.set_priority("/priority_test.txt", priority=3)
+        assert fs.get_priority("/priority_test.txt") == 3
 
         # Nonexistent file
-        assert not fs.set_priority("virtual/nonexistent.txt", priority=5)
-        assert fs.get_priority("virtual/nonexistent.txt") is None
+        assert not fs.set_priority("/nonexistent.txt", priority=5)
+        assert fs.get_priority("/nonexistent.txt") is None
 
     def test_mkdir_listdir(self, fs):
         """Test directory operations."""
-        fs.mkdir("virtual/subdir")
-        fs.write("virtual/subdir/file.txt", "data")
+        fs.mkdir("/subdir")
+        fs.write("/subdir/file.txt", "data")
 
-        items = fs.listdir("virtual/")
+        items = fs.listdir("/")
         assert "subdir" in items
 
     def test_rmdir(self, fs):
         """Test removing directory."""
-        fs.mkdir("virtual/emptydir")
-        assert fs.rmdir("virtual/emptydir")
-        assert not fs.exists("virtual/emptydir")
+        fs.mkdir("/emptydir")
+        assert fs.rmdir("/emptydir")
+        assert not fs.exists("/emptydir")
 
     def test_glob(self, fs):
         """Test glob matching."""
-        fs.write("virtual/test1.txt", "data1")
-        fs.write("virtual/test2.txt", "data2")
-        fs.write("virtual/other.txt", "data3")
+        fs.write("/test1.txt", "data1")
+        fs.write("/test2.txt", "data2")
+        fs.write("/other.txt", "data3")
 
-        matches = fs.glob("virtual/test*.txt")
+        matches = fs.glob("/test*.txt")
         assert len(matches) == 2
 
     def test_stats(self, fs):
         """Test statistics."""
-        fs.write("virtual/file1.txt", "data" * 1000)
+        fs.write("/file1.txt", "data" * 1000)
         stats = fs.get_stats()
 
         assert "memory" in stats
@@ -879,51 +879,51 @@ class TestMemFileSystem:
     def test_gc(self, fs):
         """Test garbage collection."""
         for i in range(10):
-            fs.write(f"virtual/file_{i}.txt", f"data {i}" * 1000, priority=3)
+            fs.write(f"/file_{i}.txt", f"data {i}" * 1000, priority=3)
 
         swapped = fs.gc(target_usage=0.3)
         assert swapped >= 0
 
     def test_preload(self, fs):
         """Test file preloading."""
-        fs.write("virtual/preload_test.txt", "data" * 1000, priority=3)
+        fs.write("/preload_test.txt", "data" * 1000, priority=3)
         fs.gc(0.0)
 
-        task_id = fs.preload("virtual/preload_test.txt", priority=8)
+        task_id = fs.preload("/preload_test.txt", priority=8)
         assert isinstance(task_id, str)
 
     def test_context_manager(self):
         """Test context manager."""
         with MemFileSystem(persist_path="./tmp/test_ctx_data") as fs:
-            fs.write("virtual/test.txt", "data")
-            assert fs.exists("virtual/test.txt")
+            fs.write("/test.txt", "data")
+            assert fs.exists("/test.txt")
 
     def test_open_file(self, fs):
         """Test opening file with open() method."""
-        with fs.open("virtual/test.txt", "w") as f:
+        with fs.open("/test.txt", "w") as f:
             f.write(b"hello")
 
-        with fs.open("virtual/test.txt", "r") as f:
+        with fs.open("/test.txt", "r") as f:
             content = f.read()
             assert content == b"hello"
 
     def test_get_file_info(self, fs):
         """Test getting file info."""
-        fs.write("virtual/info.txt", "data", priority=7)
-        info = fs.get_file_info("virtual/info.txt")
+        fs.write("/info.txt", "data", priority=7)
+        info = fs.get_file_info("/info.txt")
         assert info is not None
         assert info["location"] == "memory"
         assert info["priority"] == 7
 
     def test_get_file_info_nonexistent(self, fs):
         """Test getting info of nonexistent file."""
-        info = fs.get_file_info("virtual/nonexistent.txt")
+        info = fs.get_file_info("/nonexistent.txt")
         assert info is None
 
     def test_read_nonexistent_raises(self, fs):
         """Test reading nonexistent file raises."""
         with pytest.raises(FileNotFoundError):
-            fs.read("virtual/nonexistent.txt")
+            fs.read("/nonexistent.txt")
 
     def test_shutdown(self, fs):
         """Test shutdown."""
@@ -934,7 +934,7 @@ class TestMemFileSystem:
         """Test writing after shutdown raises."""
         fs.shutdown()
         with pytest.raises(RuntimeError):
-            fs.write("virtual/test.txt", "data")
+            fs.write("/test.txt", "data")
 
 
 # =============================================================================
@@ -990,44 +990,44 @@ class TestNativeAPI:
 
     def test_write_read(self):
         """Test native write and read."""
-        self.write("virtual/native_test.txt", "hello")
-        content = self.read("virtual/native_test.txt")
+        self.write("/native_test.txt", "hello")
+        content = self.read("/native_test.txt")
         assert content.decode("utf-8") == "hello"
 
     def test_exists_delete(self):
         """Test exists and delete."""
-        self.write("virtual/to_delete.txt", "data")
-        assert self.exists("virtual/to_delete.txt")
-        self.delete("virtual/to_delete.txt")
-        assert not self.exists("virtual/to_delete.txt")
+        self.write("/to_delete.txt", "data")
+        assert self.exists("/to_delete.txt")
+        self.delete("/to_delete.txt")
+        assert not self.exists("/to_delete.txt")
 
     def test_mkdir_rmdir(self):
         """Test mkdir and rmdir."""
-        assert self.mkdir("virtual/testdir")
-        items = self.listdir("virtual/")
+        assert self.mkdir("/testdir")
+        items = self.listdir("/")
         assert "testdir" in items
 
     def test_listdir(self):
         """Test listdir."""
-        self.write("virtual/file1.txt", "data")
-        self.write("virtual/file2.txt", "data")
-        items = self.listdir("virtual/")
+        self.write("/file1.txt", "data")
+        self.write("/file2.txt", "data")
+        items = self.listdir("/")
         assert "file1.txt" in items
         assert "file2.txt" in items
 
     def test_glob(self):
         """Test glob."""
-        self.write("virtual/glob_test1.txt", "data")
-        self.write("virtual/glob_test2.txt", "data")
-        matches = self.glob("virtual/glob_test*.txt")
+        self.write("/glob_test1.txt", "data")
+        self.write("/glob_test2.txt", "data")
+        matches = self.glob("/glob_test*.txt")
         assert len(matches) == 2
 
     def test_set_get_priority(self):
         """Test set_priority and get_priority."""
-        self.write("virtual/priority.txt", "data", priority=7)
-        assert self.get_priority("virtual/priority.txt") == 7
-        self.set_priority("virtual/priority.txt", priority=3)
-        assert self.get_priority("virtual/priority.txt") == 3
+        self.write("/priority.txt", "data", priority=7)
+        assert self.get_priority("/priority.txt") == 7
+        self.set_priority("/priority.txt", priority=3)
+        assert self.get_priority("/priority.txt") == 3
 
     def test_get_stats(self):
         """Test get_stats."""
@@ -1036,14 +1036,14 @@ class TestNativeAPI:
 
     def test_get_file_info(self):
         """Test get_file_info."""
-        self.write("virtual/info.txt", "data")
-        info = self.get_file_info("virtual/info.txt")
+        self.write("/info.txt", "data")
+        info = self.get_file_info("/info.txt")
         assert info is not None
 
     def test_gc(self):
         """Test gc."""
         for i in range(5):
-            self.write(f"virtual/gc_file_{i}.txt", f"data {i}" * 100, priority=2)
+            self.write(f"/gc_file_{i}.txt", f"data {i}" * 100, priority=2)
         swapped = self.gc(target_usage=0.5)
         assert swapped >= 0
 
@@ -1061,7 +1061,7 @@ class TestConcurrentAccess:
         fs = MemFileSystem(persist_path="./tmp/test_concurrent", enable_logging=False)
 
         def write_file(i):
-            fs.write(f"virtual/concurrent_{i}.txt", f"data {i}")
+            fs.write(f"/concurrent_{i}.txt", f"data {i}")
 
         threads = [threading.Thread(target=write_file, args=(i,)) for i in range(10)]
         for t in threads:
@@ -1070,7 +1070,7 @@ class TestConcurrentAccess:
             t.join()
 
         for i in range(10):
-            assert fs.exists(f"virtual/concurrent_{i}.txt")
+            assert fs.exists(f"/concurrent_{i}.txt")
 
         fs.shutdown()
 
@@ -1079,11 +1079,11 @@ class TestConcurrentAccess:
         fs = MemFileSystem(
             persist_path="./tmp/test_concurrent_read", enable_logging=False
         )
-        fs.write("virtual/shared.txt", "shared data")
+        fs.write("/shared.txt", "shared data")
 
         def read_file():
             for _ in range(10):
-                fs.read("virtual/shared.txt")
+                fs.read("/shared.txt")
 
         threads = [threading.Thread(target=read_file) for _ in range(5)]
         for t in threads:

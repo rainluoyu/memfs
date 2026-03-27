@@ -32,7 +32,6 @@ class MemFileSystem:
         persist_path: str = "./memfs_data",
         persist_mode: bool = False,
         temp_mode: bool = True,
-        compress_memory: bool = True,
         worker_threads: int = 4,
         enable_logging: bool = True,
         log_path: Optional[str] = None,
@@ -46,7 +45,6 @@ class MemFileSystem:
             persist_path: Root path for real files.
             persist_mode: If True, keep files after shutdown (persistent mode).
             temp_mode: If True, use temp directory and cleanup on shutdown.
-            compress_memory: If True, compress data in memory.
             worker_threads: Number of background worker threads.
             enable_logging: Whether to enable operation logging.
             log_path: Path for operation log file.
@@ -73,7 +71,6 @@ class MemFileSystem:
             persist_path=str(real_root),
             persist_mode=persist_mode,
             temp_mode=temp_mode and not persist_mode,
-            compress_memory=compress_memory,
             worker_threads=worker_threads,
         )
 
