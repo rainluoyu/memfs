@@ -1,5 +1,7 @@
 # MemFS - Memory-First File System
 
+> 自用，这是一个完全AI构建的python包
+
 **内存优先的虚拟文件系统**
 
 [![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
