@@ -101,7 +101,7 @@ pytest tests/test_core.py::TestMemFileSystem::test_write_read -v
 | `memfs/api/object.py` | `MemFileSystem`（重导出） | 面向对象 API 入口 |
 | `memfs/core/filesystem.py` | `MemFileSystem` | 主文件系统类，协调所有操作 |
 | `memfs/core/file.py` | `VirtualFile` | 虚拟文件对象，支持文件流操作 |
-| `memfs/core/directory.py` | `VirtualDirectory`, `DirectoryManager` | 虚拟目录树管理 |
+| `memfs/core/directory.py` | `VirtualDirectory`, `DirectoryManager` | 虚拟目录树管理，使用 RLock 防止死锁 |
 | `memfs/storage/hybrid.py` | `HybridStorage`, `ExternalModificationError` | 混合存储管理器，自动内存/磁盘 tiering |
 | `memfs/storage/memory.py` | `MemoryManager`, `MemoryFile` | 内存管理器，带 eviction 策略 |
 | `memfs/storage/real_path.py` | `RealPathStorage` | 磁盘路径存储，1:1 映射虚拟路径 |
