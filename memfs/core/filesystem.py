@@ -101,7 +101,6 @@ class MemFileSystem:
         if self._closed:
             raise RuntimeError("File system is closed")
 
-
         directory, filename = self.directories.resolve_path(path)
 
         data = b""
@@ -148,7 +147,6 @@ class MemFileSystem:
         if self._closed:
             raise RuntimeError("File system is closed")
 
-
         start_time = time.time()
 
         data = self.storage.get(path, priority=priority, check_external=check_external)
@@ -188,10 +186,11 @@ class MemFileSystem:
         if isinstance(data, str):
             data = data.encode("utf-8")
 
-
         start_time = time.time()
 
-        self.directories.get_or_create_directory(os.path.dirname(path))
+        directory = self.directories.get_or_create_directory(os.path.dirname(path))
+        directory, filename = self.directories.resolve_path(path)
+        directory.add_file(filename)
 
         success = self.storage.put(path, data, priority)
 
@@ -223,7 +222,6 @@ class MemFileSystem:
         """
         if self._closed:
             raise RuntimeError("File system is closed")
-
 
         result = self.storage.remove(path)
 
@@ -309,8 +307,9 @@ class MemFileSystem:
         Returns:
             List of matching paths.
         """
-        if not pattern.startswith("虚拟/"):
-            pattern = "虚拟/" + pattern
+        # Normalize pattern - ensure it starts with /
+        if not pattern.startswith("/"):
+            pattern = "/" + pattern
 
         return self.directories.glob(pattern)
 

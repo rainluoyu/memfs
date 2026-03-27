@@ -89,7 +89,7 @@ class RealPathStorage:
             Real filesystem path.
         """
         if virtual_path.startswith("/"):
-            relative_path = virtual_path[3:]
+            relative_path = virtual_path[1:]
         else:
             relative_path = virtual_path
 

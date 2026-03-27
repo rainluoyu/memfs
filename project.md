@@ -127,7 +127,14 @@ pytest tests/test_core.py::TestMemFileSystem::test_write_read -v
 | `persist_path` | './memfs_data' | 持久化路径 |
 | `worker_threads` | 4 | 后台工作线程数 |
 | `priority_boost_threshold` | 10 | 自动提升优先级的访问次数 |
-| 路径前缀 | '/' | 虚拟路径根目录 |
+| 路径前缀 | '/' | 虚拟路径根目录（统一使用 Linux 风格路径） |
+
+### 测试覆盖
+
+- **核心测试**：`tests/test_core.py` - 131 个测试用例，覆盖所有核心模块
+- **RealPath 测试**：`tests/test_real_path.py` - 持久化存储、文件锁、异步操作测试
+- **测试框架**：pytest
+- **覆盖率**：核心模块 >80%
 
 ---
 

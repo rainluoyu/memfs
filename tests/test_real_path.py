@@ -32,20 +32,22 @@ class TestRealPathStorage:
         storage = RealPathStorage(real_root=self.test_dir, temp_mode=False)
 
         # Test path conversion
-        real_path = storage.get_real_path("虚拟/test.txt")
+        real_path = storage.get_real_path("/test.txt")
         assert str(real_path).endswith("test.txt")
-        assert self.test_dir in str(real_path)
+        # Use resolved path for comparison
+        expected_dir = os.path.abspath(self.test_dir)
+        assert expected_dir in str(real_path)
 
     def test_write_and_read(self):
         """Test synchronous write and read."""
         storage = RealPathStorage(real_root=self.test_dir, temp_mode=False)
 
         # Write file
-        result = storage.write_sync("虚拟/test.txt", b"Hello World")
+        result = storage.write_sync("/test.txt", b"Hello World")
         assert result is True
 
         # Read file
-        data = storage.read_sync("虚拟/test.txt")
+        data = storage.read_sync("/test.txt")
         assert data == b"Hello World"
 
     def test_delete(self):
@@ -53,29 +55,32 @@ class TestRealPathStorage:
         storage = RealPathStorage(real_root=self.test_dir, temp_mode=False)
 
         # Write then delete
-        storage.write_sync("虚拟/test.txt", b"data")
-        assert storage.exists("虚拟/test.txt") is True
+        storage.write_sync("/test.txt", b"data")
+        assert storage.exists("/test.txt") is True
 
-        result = storage.delete_sync("虚拟/test.txt")
+        result = storage.delete_sync("/test.txt")
         assert result is True
-        assert storage.exists("虚拟/test.txt") is False
+        assert storage.exists("/test.txt") is False
 
     def test_external_modification_detection(self):
         """Test detection of external file modifications."""
         storage = RealPathStorage(real_root=self.test_dir, temp_mode=False)
 
         # Write file
-        storage.write_sync("虚拟/test.txt", b"original")
-        file_info = storage.get_file_info("虚拟/test.txt")
+        storage.write_sync("/test.txt", b"original")
+        file_info = storage.get_file_info("/test.txt")
+
+        # Wait a bit to ensure mtime difference
+        time.sleep(0.05)
 
         # Modify externally
-        real_path = storage.get_real_path("虚拟/test.txt")
+        real_path = storage.get_real_path("/test.txt")
         with open(real_path, "wb") as f:
             f.write(b"modified")
 
         # Check detection
         modified = storage.check_external_modified(
-            "虚拟/test.txt",
+            "/test.txt",
             file_info["mtime"],
             file_info["size"],
         )
@@ -86,17 +91,21 @@ class TestRealPathStorage:
         storage = RealPathStorage(real_root=self.test_dir, temp_mode=False)
 
         # Write file
-        storage.write_sync("虚拟/test.txt", b"original")
-        file_info = storage.get_file_info("虚拟/test.txt")
+        storage.write_sync("/test.txt", b"original")
+        file_info = storage.get_file_info("/test.txt")
+        assert file_info is not None, "File info should exist"
+
+        # Wait a bit to ensure mtime difference
+        time.sleep(0.05)
 
         # Modify externally
-        real_path = storage.get_real_path("虚拟/test.txt")
+        real_path = storage.get_real_path("/test.txt")
         with open(real_path, "wb") as f:
             f.write(b"modified content")
 
         # Reload
         modified, new_data = storage.reload_if_modified(
-            "虚拟/test.txt",
+            "/test.txt",
             file_info["mtime"],
             file_info["size"],
         )
@@ -113,33 +122,33 @@ class TestFileLockManager:
         lock_mgr = FileLockManager()
 
         # Acquire write lock
-        result = lock_mgr.acquire_write("虚拟/test.txt")
+        result = lock_mgr.acquire_write("/test.txt")
         assert result is True
 
         # Release
-        lock_mgr.release_write("虚拟/test.txt")
+        lock_mgr.release_write("/test.txt")
 
     def test_read_lock(self):
         """Test read lock acquisition and release."""
         lock_mgr = FileLockManager()
 
         # Acquire read lock
-        result = lock_mgr.acquire_read("虚拟/test.txt")
+        result = lock_mgr.acquire_read("/test.txt")
         assert result is True
 
         # Release
-        lock_mgr.release_read("虚拟/test.txt")
+        lock_mgr.release_read("/test.txt")
 
     def test_concurrent_readers(self):
         """Test multiple concurrent readers."""
         lock_mgr = FileLockManager()
 
         # Multiple readers should succeed
-        assert lock_mgr.acquire_read("虚拟/test.txt") is True
-        assert lock_mgr.acquire_read("虚拟/test.txt") is True
+        assert lock_mgr.acquire_read("/test.txt") is True
+        assert lock_mgr.acquire_read("/test.txt") is True
 
-        lock_mgr.release_read("虚拟/test.txt")
-        lock_mgr.release_read("虚拟/test.txt")
+        lock_mgr.release_read("/test.txt")
+        lock_mgr.release_read("/test.txt")
 
 
 class TestPersistModes:
@@ -161,7 +170,7 @@ class TestPersistModes:
         fs = MemFileSystem(persist_mode=False, temp_mode=True)
 
         # Write file
-        fs.write("虚拟/test.txt", b"temporary data")
+        fs.write("/test.txt", b"temporary data")
 
         # Shutdown
         fs.shutdown(wait=True)
@@ -177,7 +186,7 @@ class TestPersistModes:
             persist_path=self.test_dir,
             temp_mode=False,
         )
-        fs1.write("虚拟/test.txt", b"persistent data")
+        fs1.write("/test.txt", b"persistent data")
         fs1.shutdown(wait=True)
 
         # Verify file exists
@@ -192,7 +201,7 @@ class TestPersistModes:
         )
 
         # Read data
-        data = fs2.read("虚拟/test.txt")
+        data = fs2.read("/test.txt")
         assert data == b"persistent data"
 
         fs2.shutdown(wait=True)
@@ -213,7 +222,7 @@ class TestPersistModes:
         )
 
         # Read file (should lazy load)
-        data = fs.read("虚拟/test.txt")
+        data = fs.read("/test.txt")
         assert data == b"pre-existing data"
 
         fs.shutdown(wait=True)
@@ -242,7 +251,7 @@ class TestAsyncWrite:
         )
 
         # Write file
-        fs.write("虚拟/test.txt", b"async data")
+        fs.write("/test.txt", b"async data")
 
         # Wait for async write
         time.sleep(1)
@@ -266,8 +275,8 @@ class TestAsyncWrite:
         )
 
         # Write and immediately read
-        fs.write("虚拟/test.txt", b"test data")
-        data = fs.read("虚拟/test.txt")
+        fs.write("/test.txt", b"test data")
+        data = fs.read("/test.txt")
 
         assert data == b"test data"
 
@@ -298,7 +307,7 @@ class TestSwapOut:
         )
 
         # Write low priority file
-        fs.write("虚拟/test.txt", b"data", priority=1)
+        fs.write("/test.txt", b"data", priority=1)
 
         # Force GC
         fs.gc(target_usage=0.0)
