@@ -3,10 +3,13 @@ Tests for real path persistence and new features.
 """
 
 import os
+import sys
 import time
 import shutil
 import pytest
 from pathlib import Path
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from memfs import MemFileSystem
 from memfs.storage.real_path import RealPathStorage
@@ -223,6 +226,202 @@ class TestPersistModes:
         assert data == b"pre-existing data"
 
         fs.shutdown(wait=True)
+
+
+class TestPersistentListdir:
+    """Test listdir functionality in persistent mode."""
+
+    def setup_method(self):
+        """Setup test fixtures."""
+        self.test_dir = "./tmp/test_persist_listdir"
+        if os.path.exists(self.test_dir):
+            shutil.rmtree(self.test_dir)
+
+    def teardown_method(self):
+        """Cleanup after tests."""
+        if os.path.exists(self.test_dir):
+            shutil.rmtree(self.test_dir)
+
+    def test_listdir_with_preexisting_files(self):
+        """Test listdir shows pre-existing files in persistent mode.
+
+        Bug fix: In persistent mode, when specifying a directory that already
+        contains files, listdir should return those files even with lazy loading.
+        """
+        # Create directory and files first
+        os.makedirs(self.test_dir, exist_ok=True)
+        test_file = os.path.join(self.test_dir, "preexisting.txt")
+        with open(test_file, "wb") as f:
+            f.write(b"pre-existing data")
+
+        # Create filesystem in persistent mode pointing to existing directory
+        fs = MemFileSystem(
+            storage_mode="persist",
+            persist_path=self.test_dir,
+        )
+
+        # listdir should return the pre-existing file
+        contents = fs.listdir("/")
+        assert "preexisting.txt" in contents, (
+            f"Expected 'preexisting.txt' in listdir result, got {contents}"
+        )
+
+        # Should also be able to read the file
+        data = fs.read("/preexisting.txt")
+        assert data == b"pre-existing data"
+
+        fs.shutdown(wait=True)
+
+    def test_listdir_with_nested_preexisting_files(self):
+        """Test listdir shows nested pre-existing files in persistent mode."""
+        # Create directory structure with files
+        os.makedirs(self.test_dir, exist_ok=True)
+        subdir = os.path.join(self.test_dir, "subdir")
+        os.makedirs(subdir, exist_ok=True)
+
+        test_file1 = os.path.join(self.test_dir, "root.txt")
+        test_file2 = os.path.join(subdir, "nested.txt")
+
+        with open(test_file1, "wb") as f:
+            f.write(b"root data")
+        with open(test_file2, "wb") as f:
+            f.write(b"nested data")
+
+        # Create filesystem in persistent mode
+        fs = MemFileSystem(
+            storage_mode="persist",
+            persist_path=self.test_dir,
+        )
+
+        # Root directory should list the file and subdirectory
+        root_contents = fs.listdir("/")
+        assert "root.txt" in root_contents
+        assert "subdir" in root_contents
+
+        # Subdirectory should list its file
+        subdir_contents = fs.listdir("/subdir")
+        assert "nested.txt" in subdir_contents
+
+        fs.shutdown(wait=True)
+
+    def test_listdir_after_new_file_in_persist_mode(self):
+        """Test listdir works correctly after adding new files in persistent mode."""
+        fs = MemFileSystem(
+            storage_mode="persist",
+            persist_path=self.test_dir,
+        )
+
+        # Initially empty
+        contents = fs.listdir("/")
+        assert contents == []
+
+        # Add a file
+        fs.write("/newfile.txt", b"new data")
+
+        # Should appear in listdir
+        contents = fs.listdir("/")
+        assert "newfile.txt" in contents
+
+        fs.shutdown(wait=True)
+
+
+class TestTempModePathSafety:
+    """Test path safety checks in temporary mode."""
+
+    def test_temp_mode_rejects_existing_file(self):
+        """Test that temp mode raises error if path exists as a file."""
+        test_file = "./tmp/test_safety_file.txt"
+        os.makedirs("./tmp", exist_ok=True)
+
+        # Create a file at the target path
+        with open(test_file, "wb") as f:
+            f.write(b"existing file")
+
+        try:
+            # Should raise FileExistsError
+            with pytest.raises(FileExistsError) as exc_info:
+                MemFileSystem(
+                    storage_mode="temp",
+                    persist_path=test_file,
+                )
+
+            assert "already exists as a file" in str(exc_info.value)
+        finally:
+            # Cleanup
+            if os.path.exists(test_file):
+                os.remove(test_file)
+
+    def test_temp_mode_rejects_nonempty_directory(self):
+        """Test that temp mode raises error if path exists as non-empty directory."""
+        test_dir = "./tmp/test_safety_nonempty"
+        os.makedirs(test_dir, exist_ok=True)
+
+        # Create a file inside the directory
+        test_file = os.path.join(test_dir, "existing.txt")
+        with open(test_file, "wb") as f:
+            f.write(b"existing")
+
+        try:
+            # Should raise FileExistsError
+            with pytest.raises(FileExistsError) as exc_info:
+                MemFileSystem(
+                    storage_mode="temp",
+                    persist_path=test_dir,
+                )
+
+            assert "already exists as a non-empty directory" in str(exc_info.value)
+        finally:
+            # Cleanup
+            if os.path.exists(test_dir):
+                shutil.rmtree(test_dir)
+
+    def test_temp_mode_allows_empty_directory(self):
+        """Test that temp mode allows empty directory."""
+        test_dir = "./tmp/test_safety_empty"
+        os.makedirs(test_dir, exist_ok=True)
+
+        try:
+            # Should succeed (empty directory is ok)
+            fs = MemFileSystem(
+                storage_mode="temp",
+                persist_path=test_dir,
+            )
+
+            # Should be able to use it normally
+            fs.write("/test.txt", b"data")
+            assert fs.exists("/test.txt")
+
+            fs.shutdown(wait=True)
+        finally:
+            # Cleanup (directory might be cleaned by temp mode)
+            if os.path.exists(test_dir):
+                shutil.rmtree(test_dir)
+
+    def test_temp_mode_creates_new_directory(self):
+        """Test that temp mode creates new directory if it doesn't exist."""
+        test_dir = "./tmp/test_safety_new"
+
+        # Ensure it doesn't exist
+        if os.path.exists(test_dir):
+            shutil.rmtree(test_dir)
+
+        try:
+            # Should succeed and create the directory
+            fs = MemFileSystem(
+                storage_mode="temp",
+                persist_path=test_dir,
+            )
+
+            fs.write("/test.txt", b"data")
+            assert fs.exists("/test.txt")
+
+            fs.shutdown(wait=True)
+
+            # In temp mode, directory should be cleaned up on shutdown
+            # (but we don't test this as it happens in atexit)
+        finally:
+            if os.path.exists(test_dir):
+                shutil.rmtree(test_dir)
 
 
 class TestAsyncWrite:

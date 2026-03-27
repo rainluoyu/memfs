@@ -55,14 +55,15 @@ class MemFileSystem:
         real_root = Path(persist_path).expanduser().resolve()
         self._persist_path = str(real_root)
 
+        self.directories = DirectoryManager()
+
         self.storage = HybridStorage(
             memory_limit=memory_limit,
             persist_path=str(real_root),
             storage_mode=storage_mode,
             worker_threads=worker_threads,
+            directory_manager=self.directories,
         )
-
-        self.directories = DirectoryManager()
 
         self.priority_boost_threshold = priority_boost_threshold
         self._file_priorities: Dict[str, int] = {}

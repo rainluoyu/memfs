@@ -102,9 +102,9 @@ pytest tests/test_core.py::TestMemFileSystem::test_write_read -v
 | `memfs/core/filesystem.py` | `MemFileSystem` | 主文件系统类，协调所有操作 |
 | `memfs/core/file.py` | `VirtualFile` | 虚拟文件对象，支持文件流操作 |
 | `memfs/core/directory.py` | `VirtualDirectory`, `DirectoryManager` | 虚拟目录树管理，使用 RLock 防止死锁 |
-| `memfs/storage/hybrid.py` | `HybridStorage`, `ExternalModificationError` | 混合存储管理器，自动内存/磁盘 tiering |
+| `memfs/storage/hybrid.py` | `HybridStorage`, `ExternalModificationError`, `_sync_persisted_files_to_directories()` | 混合存储管理器，自动内存/磁盘 tiering；持久化模式下同步磁盘文件到目录树 |
 | `memfs/storage/memory.py` | `MemoryManager`, `MemoryFile` | 内存管理器，带 eviction 策略 |
-| `memfs/storage/real_path.py` | `RealPathStorage` | 磁盘路径存储，1:1 映射虚拟路径 |
+| `memfs/storage/real_path.py` | `RealPathStorage`, `_check_path_safety()` | 磁盘路径存储，1:1 映射虚拟路径；临时模式下的路径安全检查 |
 | `memfs/storage/lock_manager.py` | `FileLockManager` | 文件读写锁管理 |
 | `memfs/cache/lfu.py` | `LFUCache` | LFU 缓存算法实现 |
 | `memfs/cache/priority.py` | `PriorityQueue`, `PriorityEntry` | 优先级队列，用于 eviction 决策 |
@@ -133,7 +133,7 @@ pytest tests/test_core.py::TestMemFileSystem::test_write_read -v
 ### 测试覆盖
 
 - **核心测试**：`tests/test_core.py` - 131 个测试用例，覆盖所有核心模块
-- **RealPath 测试**：`tests/test_real_path.py` - 持久化存储、文件锁、异步操作测试
+- **RealPath 测试**：`tests/test_real_path.py` - 21 个测试用例，包含持久化存储、文件锁、异步操作、持久化模式 listdir、临时模式路径安全检查测试
 - **测试框架**：pytest
 - **覆盖率**：核心模块 >80%
 

@@ -39,6 +39,7 @@ class RealPathStorage:
         self._file_info: Dict[str, dict] = {}  # Cache file info (mtime, size)
 
         if temp_mode:
+            self._check_path_safety()
             self._ensure_directory()
             self._register_cleanup()
         else:
@@ -48,6 +49,27 @@ class RealPathStorage:
     def _ensure_directory(self):
         """Ensure root directory exists."""
         self.real_root.mkdir(parents=True, exist_ok=True)
+
+    def _check_path_safety(self):
+        """Check path safety for temp mode.
+
+        In temp mode, verify that the target path does not already exist
+        as a file or non-empty directory to prevent accidental data loss.
+
+        Raises:
+            FileExistsError: If path exists as a file or non-empty directory.
+        """
+        if self.real_root.exists():
+            if self.real_root.is_file():
+                raise FileExistsError(
+                    f"Temp mode path '{self.real_root}' already exists as a file. "
+                    "Please specify a different path or remove the existing file."
+                )
+            if any(self.real_root.iterdir()):
+                raise FileExistsError(
+                    f"Temp mode path '{self.real_root}' already exists as a non-empty directory. "
+                    "Please specify a different path or remove the existing directory."
+                )
 
     def _register_cleanup(self):
         """Register cleanup on program exit."""

@@ -32,6 +32,7 @@ class HybridStorage:
         storage_mode: str = "temp",
         worker_threads: int = 4,
         on_swap: Optional[Callable[[str, str], None]] = None,
+        directory_manager=None,
     ):
         """
         Initialize hybrid storage.
@@ -42,6 +43,7 @@ class HybridStorage:
             storage_mode: Storage mode - "temp" (temporary, cleanup on shutdown) or "persist" (keep files after shutdown).
             worker_threads: Number of background worker threads.
             on_swap: Callback for swap events (key, direction).
+            directory_manager: Optional DirectoryManager for syncing persisted files.
         """
         self._lock = threading.Lock()
         self._on_swap = on_swap
@@ -74,6 +76,10 @@ class HybridStorage:
         self._pending_ops: Dict[str, str] = {}
         self._file_locations: Dict[str, str] = {}
         self._file_hashes: Dict[str, tuple] = {}
+        self._directory_manager = directory_manager
+
+        if self.persist_mode and self._directory_manager:
+            self._sync_persisted_files_to_directories()
 
     def _on_memory_eviction(self, key: str):
         """Callback when memory manager evicts a file."""
@@ -555,6 +561,29 @@ class HybridStorage:
         """
         self.worker.shutdown(wait=wait)
         self.real_storage.shutdown()
+
+    def _sync_persisted_files_to_directories(self):
+        """Sync persisted files from disk to directory manager."""
+        if not self._directory_manager:
+            return
+
+        all_files = self.real_storage.get_all_files()
+        for virtual_path in all_files:
+            # Use PurePosixPath for virtual paths (always use / separator)
+            from pathlib import PurePosixPath
+
+            pure_path = PurePosixPath(virtual_path)
+
+            dir_path = str(pure_path.parent)
+            if dir_path == ".":
+                dir_path = "/"
+
+            filename = pure_path.name
+
+            directory = self._directory_manager.get_or_create_directory(dir_path)
+            directory.add_file(filename)
+
+            self._file_locations[virtual_path] = "real"
 
     def clear(self):
         """Clear all files from both memory and real path."""
