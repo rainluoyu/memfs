@@ -6,12 +6,14 @@ Main entry point for file system operations.
 import os
 import threading
 import time
+import tempfile
+import shutil
 from typing import Any, BinaryIO, Dict, List, Optional, Union
 from pathlib import Path
 
 from ..core.file import VirtualFile
 from ..core.directory import DirectoryManager
-from ..storage.hybrid import HybridStorage
+from ..storage.hybrid import HybridStorage, ExternalModificationError
 from ..utils.logger import OperationLogger, OperationType
 from ..utils.stats import Statistics
 
@@ -21,45 +23,57 @@ class MemFileSystem:
     Main file system class for MemFS.
 
     Provides both high-level and low-level file operations
-    with automatic memory/disk tiering.
+    with automatic memory/real-path tiering.
     """
 
     def __init__(
         self,
         memory_limit: float = 0.8,
         persist_path: str = "./memfs_data",
-        compression: str = "gzip",
-        compression_level: int = 6,
+        persist_mode: bool = False,
+        temp_mode: bool = True,
+        compress_memory: bool = True,
         worker_threads: int = 4,
         enable_logging: bool = True,
         log_path: Optional[str] = None,
         priority_boost_threshold: int = 10,
-        temp_mode: bool = False,
     ):
         """
         Initialize MemFileSystem.
 
         Args:
             memory_limit: Memory usage limit (0-1).
-            persist_path: Path for persistent storage.
-            compression: Compression algorithm ('none', 'gzip', 'lz4', 'zstd').
-            compression_level: Compression level (1-9).
+            persist_path: Root path for real files.
+            persist_mode: If True, keep files after shutdown (persistent mode).
+            temp_mode: If True, use temp directory and cleanup on shutdown.
+            compress_memory: If True, compress data in memory.
             worker_threads: Number of background worker threads.
             enable_logging: Whether to enable operation logging.
             log_path: Path for operation log file.
             priority_boost_threshold: Access count to boost priority.
-            temp_mode: If True, delete persist_path on shutdown (temporary mode).
         """
         self._lock = threading.Lock()
         self._closed = False
-        self._temp_mode = temp_mode
-        self._persist_path = persist_path
+        self._persist_mode = persist_mode
+        self._temp_dir: Optional[Path] = None
+
+        if persist_mode:
+            real_root = Path(persist_path).expanduser().resolve()
+        else:
+            if temp_mode:
+                self._temp_dir = Path(tempfile.mkdtemp(prefix="memfs_"))
+                real_root = self._temp_dir
+            else:
+                real_root = Path(persist_path).expanduser().resolve()
+
+        self._persist_path = str(real_root)
 
         self.storage = HybridStorage(
             memory_limit=memory_limit,
-            persist_path=persist_path,
-            compression=compression,
-            compression_level=compression_level,
+            persist_path=str(real_root),
+            persist_mode=persist_mode,
+            temp_mode=temp_mode and not persist_mode,
+            compress_memory=compress_memory,
             worker_threads=worker_threads,
         )
 
@@ -98,7 +112,10 @@ class MemFileSystem:
         data = b""
 
         if "r" in mode or "+" in mode:
-            data = self.storage.get(path, priority=priority) or b""
+            try:
+                data = self.storage.get(path, priority=priority) or b""
+            except ExternalModificationError:
+                pass
 
         file = VirtualFile(key=path, data=data, mode=mode, filesystem=self)
 
@@ -106,24 +123,32 @@ class MemFileSystem:
             self._set_priority_internal(path, priority)
 
         self._log_operation(
-            OperationType.READ if "r" in mode else OperationType.WRITE, path
+            OperationType.READ if "r" in mode else OperationType.WRITE,
+            path,
         )
 
         return file
 
-    def read(self, path: str, priority: Optional[int] = None) -> bytes:
+    def read(
+        self,
+        path: str,
+        priority: Optional[int] = None,
+        check_external: bool = True,
+    ) -> bytes:
         """
         Read entire file.
 
         Args:
             path: File path.
             priority: Optional priority for access.
+            check_external: If True, check for external modifications.
 
         Returns:
             File contents.
 
         Raises:
             FileNotFoundError: If file doesn't exist.
+            ExternalModificationError: If file was modified externally.
         """
         if self._closed:
             raise RuntimeError("File system is closed")
@@ -133,7 +158,7 @@ class MemFileSystem:
 
         start_time = time.time()
 
-        data = self.storage.get(path, priority=priority)
+        data = self.storage.get(path, priority=priority, check_external=check_external)
 
         if data is None:
             raise FileNotFoundError(f"File not found: {path}")
@@ -142,7 +167,10 @@ class MemFileSystem:
 
         if self.logger:
             self.logger.log(
-                OperationType.READ, path, size=len(data), duration_ms=duration_ms
+                OperationType.READ,
+                path,
+                size=len(data),
+                duration_ms=duration_ms,
             )
 
         self._track_access(path)
@@ -323,7 +351,10 @@ class MemFileSystem:
 
         if self.logger:
             self.logger.log(
-                OperationType.SET_PRIORITY, path, priority=priority, success=result
+                OperationType.SET_PRIORITY,
+                path,
+                priority=priority,
+                success=result,
             )
 
         return result
@@ -384,7 +415,9 @@ class MemFileSystem:
         """
         if self.logger:
             self.logger.log(
-                OperationType.GC, "system", metadata={"target_usage": target_usage}
+                OperationType.GC,
+                "system",
+                metadata={"target_usage": target_usage},
             )
 
         return self.storage.gc(target_usage)
@@ -426,10 +459,10 @@ class MemFileSystem:
             mem_info = self.storage.memory.get_file_info(path)
             if mem_info:
                 info.update(mem_info)
-        elif location == "disk":
-            disk_info = self.storage.disk.get_metadata(path)
-            if disk_info:
-                info.update(disk_info)
+        elif location == "real":
+            real_info = self.storage.real_storage.get_file_info(path)
+            if real_info:
+                info.update(real_info)
 
         return info
 
@@ -473,13 +506,11 @@ class MemFileSystem:
         self._closed = True
         self.storage.shutdown(wait=wait)
 
-        if self._temp_mode and self._persist_path:
-            import shutil
-            from pathlib import Path
-
-            persist_dir = Path(self._persist_path)
-            if persist_dir.exists():
-                shutil.rmtree(persist_dir)
+        if self._temp_dir and self._temp_dir.exists():
+            try:
+                shutil.rmtree(self._temp_dir)
+            except Exception:
+                pass
 
     def __enter__(self):
         """Context manager entry."""

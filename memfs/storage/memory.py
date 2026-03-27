@@ -50,6 +50,7 @@ class MemoryManager:
         self,
         memory_limit: float = 0.8,
         on_eviction: Optional[Callable[[str], None]] = None,
+        compress_data: bool = True,
     ):
         """
         Initialize memory manager.
@@ -58,9 +59,11 @@ class MemoryManager:
             memory_limit: Memory usage limit as fraction of total (0-1).
             on_eviction: Callback when eviction is needed.
                         Signature: (file_key) -> None
+            compress_data: If True, compress data in memory.
         """
         self.memory_limit = memory_limit
         self._on_eviction = on_eviction
+        self.compress_data = compress_data
 
         self._lock = threading.Lock()
         self._files: Dict[str, MemoryFile] = OrderedDict()

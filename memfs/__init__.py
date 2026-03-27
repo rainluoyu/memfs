@@ -31,13 +31,6 @@ from .core.file import VirtualFile
 from .core.directory import VirtualDirectory, DirectoryManager
 from .utils.stats import Statistics
 from .utils.logger import OperationLogger, OperationType
-from .utils.compress import (
-    Compressor,
-    GzipCompressor,
-    Lz4Compressor,
-    ZstdCompressor,
-    CompressionFactory,
-)
 
 __version__ = "0.1.0"
 __all__ = [
@@ -49,11 +42,6 @@ __all__ = [
     "Statistics",
     "OperationLogger",
     "OperationType",
-    "Compressor",
-    "GzipCompressor",
-    "Lz4Compressor",
-    "ZstdCompressor",
-    "CompressionFactory",
     "open",
     "read",
     "write",
