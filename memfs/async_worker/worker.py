@@ -3,11 +3,13 @@ Async worker for MemFS.
 Handles background operations using thread pool.
 """
 
+import atexit
 import threading
 import time
+import warnings
 from concurrent.futures import ThreadPoolExecutor, Future, as_completed
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union, Set
 from enum import Enum
 
 
@@ -57,6 +59,11 @@ class AsyncWorker:
 
     Provides non-blocking execution of file operations.
     """
+
+    # Global registry for cleanup tracking
+    _all_workers: Set["AsyncWorker"] = set()
+    _registry_lock = threading.Lock()
+    _atexit_registered: bool = False
 
     def __init__(
         self, max_workers: int = 4, queue_size: int = 100, daemon: bool = True
@@ -288,15 +295,34 @@ class AsyncWorker:
 
         return results
 
-    def shutdown(self, wait: bool = True):
+    def shutdown(self, wait: bool = True) -> int:
         """
         Shut down the worker.
 
         Args:
             wait: Whether to wait for pending tasks.
+
+        Returns:
+            Number of pending tasks remaining if not waiting.
         """
         self._shutdown = True
+
+        if not wait:
+            # Return pending task count immediately
+            with self._lock:
+                pending_count = len(self._pending_tasks)
+            self._executor.shutdown(wait=False)
+            # Will complete in background
+            return pending_count
+
         self._executor.shutdown(wait=wait)
+        self._shutdown_complete = True
+
+        # Remove from registry
+        with AsyncWorker._registry_lock:
+            AsyncWorker._all_workers.discard(self)
+
+        return 0
 
     def get_stats(self) -> dict:
         """Get worker statistics."""

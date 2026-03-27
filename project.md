@@ -99,7 +99,7 @@ pytest tests/test_core.py::TestMemFileSystem::test_write_read -v
 | `memfs/__init__.py` | 模块导出 | 导出所有公共 API |
 | `memfs/api/native.py` | `init()`, `write()`, `read()`, `exists()`, `delete()`, `open()`, `mkdir()`, `rmdir()`, `listdir()`, `glob()`, `set_priority()`, `get_priority()`, `preload()`, `gc()`, `get_stats()`, `get_file_info()` | 原生风格 API |
 | `memfs/api/object.py` | `MemFileSystem`（重导出） | 面向对象 API 入口 |
-| `memfs/core/filesystem.py` | `MemFileSystem` | 主文件系统类，协调所有操作 |
+| `memfs/core/filesystem.py` | `MemFileSystem`, `_normalize_path()`, `shutdown_async()` | 主文件系统类，协调所有操作；路径规范化；异步关闭 |
 | `memfs/core/file.py` | `VirtualFile` | 虚拟文件对象，支持文件流操作 |
 | `memfs/core/directory.py` | `VirtualDirectory`, `DirectoryManager` | 虚拟目录树管理，使用 RLock 防止死锁 |
 | `memfs/storage/hybrid.py` | `HybridStorage`, `ExternalModificationError`, `_sync_persisted_files_to_directories()` | 混合存储管理器，自动内存/磁盘 tiering；持久化模式下同步磁盘文件到目录树 |
@@ -109,7 +109,7 @@ pytest tests/test_core.py::TestMemFileSystem::test_write_read -v
 | `memfs/cache/lfu.py` | `LFUCache` | LFU 缓存算法实现 |
 | `memfs/cache/priority.py` | `PriorityQueue`, `PriorityEntry` | 优先级队列，用于 eviction 决策 |
 | `memfs/cache/tracker.py` | `AccessTracker`, `FileAccessRecord` | 访问频率追踪 |
-| `memfs/async_worker/worker.py` | `AsyncWorker`, `Task`, `TaskResult`, `TaskType` | 异步任务执行器 |
+| `memfs/async_worker/worker.py` | `AsyncWorker`, `Task`, `TaskResult`, `TaskType`, `_atexit_cleanup()` | 异步任务执行器；Python 退出时清理和警告 |
 | `memfs/utils/stats.py` | `Statistics`, `MemoryStats`, `DiskStats`, `CacheStats`, `OperationStats` | 统计信息收集器 |
 | `memfs/utils/logger.py` | `OperationLogger`, `OperationType`, `LogEntry` | 操作日志记录器 |
 

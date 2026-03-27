@@ -515,5 +515,195 @@ class TestSwapOut:
         fs.shutdown(wait=True)
 
 
+class TestAsyncShutdown:
+    """Test asynchronous shutdown functionality."""
+
+    def setup_method(self):
+        """Setup test fixtures."""
+        self.test_dir = "./tmp/test_async_shutdown"
+        if os.path.exists(self.test_dir):
+            shutil.rmtree(self.test_dir)
+
+    def teardown_method(self):
+        """Cleanup after tests."""
+        # Wait a bit for async operations to complete
+        time.sleep(0.5)
+        if os.path.exists(self.test_dir):
+            shutil.rmtree(self.test_dir)
+
+    def test_shutdown_returns_immediately(self):
+        """Test that shutdown(wait=False) returns immediately."""
+        fs = MemFileSystem(
+            storage_mode="persist",
+            persist_path=self.test_dir,
+        )
+
+        # Write multiple files
+        for i in range(5):
+            fs.write(f"/file{i}.txt", b"data" * 1000)
+
+        # Async shutdown should return immediately
+        import time
+
+        start = time.time()
+        pending = fs.shutdown(wait=False)
+        elapsed = time.time() - start
+
+        # Should return in less than 0.1 seconds
+        assert elapsed < 0.1, (
+            f"shutdown(wait=False) took {elapsed}s, should be immediate"
+        )
+        # May have pending tasks
+        assert pending >= 0
+
+    def test_shutdown_async_method(self):
+        """Test shutdown_async convenience method."""
+        fs = MemFileSystem(
+            storage_mode="persist",
+            persist_path=self.test_dir,
+        )
+
+        fs.write("/test.txt", b"data")
+
+        # shutdown_async should return pending count
+        pending = fs.shutdown_async()
+        assert isinstance(pending, int)
+        assert pending >= 0
+
+
+class TestPathNormalization:
+    """Test path normalization for Windows compatibility."""
+
+    def setup_method(self):
+        """Setup test fixtures."""
+        self.test_dir = "./tmp/test_path_norm"
+        if os.path.exists(self.test_dir):
+            shutil.rmtree(self.test_dir)
+
+    def teardown_method(self):
+        """Cleanup after tests."""
+        if os.path.exists(self.test_dir):
+            shutil.rmtree(self.test_dir)
+
+    def test_write_with_backslash_path(self):
+        """Test writing file with Windows-style backslash path."""
+        fs = MemFileSystem(
+            storage_mode="persist",
+            persist_path=self.test_dir,
+        )
+
+        # Use backslash (Windows style)
+        result = fs.write("\\test.txt", b"data")
+        assert result == 4
+
+        # Should be readable with forward slash
+        data = fs.read("/test.txt")
+        assert data == b"data"
+
+        fs.shutdown(wait=True)
+
+    def test_read_with_backslash_path(self):
+        """Test reading file with Windows-style backslash path."""
+        fs = MemFileSystem(
+            storage_mode="persist",
+            persist_path=self.test_dir,
+        )
+
+        # Write with forward slash
+        fs.write("/test.txt", b"data")
+
+        # Read with backslash
+        data = fs.read("\\test.txt")
+        assert data == b"data"
+
+        fs.shutdown(wait=True)
+
+    def test_exists_with_backslash_path(self):
+        """Test exists check with Windows-style backslash path."""
+        fs = MemFileSystem(
+            storage_mode="persist",
+            persist_path=self.test_dir,
+        )
+
+        fs.write("/test.txt", b"data")
+
+        # Check with backslash
+        assert fs.exists("\\test.txt") is True
+        assert fs.exists("/test.txt") is True
+
+        fs.shutdown(wait=True)
+
+    def test_delete_with_backslash_path(self):
+        """Test delete with Windows-style backslash path."""
+        fs = MemFileSystem(
+            storage_mode="persist",
+            persist_path=self.test_dir,
+        )
+
+        fs.write("/test.txt", b"data")
+        assert fs.exists("/test.txt")
+
+        # Delete with backslash
+        result = fs.delete("\\test.txt")
+        assert result is True
+        assert fs.exists("/test.txt") is False
+
+        fs.shutdown(wait=True)
+
+    def test_mkdir_rmdir_with_backslash(self):
+        """Test mkdir/rmdir with Windows-style backslash path."""
+        fs = MemFileSystem(
+            storage_mode="persist",
+            persist_path=self.test_dir,
+        )
+
+        # Create directory with backslash
+        result = fs.mkdir("\\subdir")
+        assert result is True
+
+        # Check with forward slash
+        assert fs.exists("/subdir") is True
+
+        # Remove with backslash
+        result = fs.rmdir("\\subdir")
+        assert result is True
+
+        fs.shutdown(wait=True)
+
+    def test_listdir_with_backslash(self):
+        """Test listdir with Windows-style backslash path."""
+        fs = MemFileSystem(
+            storage_mode="persist",
+            persist_path=self.test_dir,
+        )
+
+        fs.write("/test.txt", b"data")
+
+        # List with backslash
+        contents = fs.listdir("\\")
+        assert "test.txt" in contents
+
+        fs.shutdown(wait=True)
+
+    def test_mixed_slash_paths(self):
+        """Test mixed slash usage in paths."""
+        fs = MemFileSystem(
+            storage_mode="persist",
+            persist_path=self.test_dir,
+        )
+
+        # Write with mixed slashes (should normalize)
+        fs.write("/subdir\\file.txt", b"data")
+
+        # Should be readable
+        assert fs.exists("/subdir/file.txt")
+        assert fs.exists("\\subdir\\file.txt")
+
+        data = fs.read("/subdir/file.txt")
+        assert data == b"data"
+
+        fs.shutdown(wait=True)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -75,12 +75,27 @@ class MemFileSystem:
 
         self._access_counts: Dict[str, int] = {}
 
+    @staticmethod
+    def _normalize_path(path: str) -> str:
+        """
+        Normalize path to use forward slashes (/).
+
+        Converts Windows-style backslashes to forward slashes for internal consistency.
+
+        Args:
+            path: Input path (may contain \ or /).
+
+        Returns:
+            Normalized path with forward slashes only.
+        """
+        return path.replace("\\", "/")
+
     def open(self, path: str, mode: str = "rb", priority: int = 5) -> VirtualFile:
         """
         Open a file.
 
         Args:
-            path: File path (e.g., '/data.txt').
+            path: File path (e.g., '/data.txt' or '\\data.txt').
             mode: File mode ('r', 'w', 'a', 'rb', 'wb', 'ab').
             priority: File priority (0-10).
 
@@ -90,24 +105,25 @@ class MemFileSystem:
         if self._closed:
             raise RuntimeError("File system is closed")
 
-        directory, filename = self.directories.resolve_path(path)
+        normalized_path = self._normalize_path(path)
+        directory, filename = self.directories.resolve_path(normalized_path)
 
         data = b""
 
         if "r" in mode or "+" in mode:
             try:
-                data = self.storage.get(path, priority=priority) or b""
+                data = self.storage.get(normalized_path, priority=priority) or b""
             except ExternalModificationError:
                 pass
 
-        file = VirtualFile(key=path, data=data, mode=mode, filesystem=self)
+        file = VirtualFile(key=normalized_path, data=data, mode=mode, filesystem=self)
 
         if "w" in mode or "a" in mode:
-            self._set_priority_internal(path, priority)
+            self._set_priority_internal(normalized_path, priority)
 
         self._log_operation(
             OperationType.READ if "r" in mode else OperationType.WRITE,
-            path,
+            normalized_path,
         )
 
         return file
@@ -138,7 +154,10 @@ class MemFileSystem:
 
         start_time = time.time()
 
-        data = self.storage.get(path, priority=priority, check_external=check_external)
+        normalized_path = self._normalize_path(path)
+        data = self.storage.get(
+            normalized_path, priority=priority, check_external=check_external
+        )
 
         if data is None:
             raise FileNotFoundError(f"File not found: {path}")
@@ -148,12 +167,12 @@ class MemFileSystem:
         if self.logger:
             self.logger.log(
                 OperationType.READ,
-                path,
+                normalized_path,
                 size=len(data),
                 duration_ms=duration_ms,
             )
 
-        self._track_access(path)
+        self._track_access(normalized_path)
 
         return data
 
@@ -177,20 +196,23 @@ class MemFileSystem:
 
         start_time = time.time()
 
-        directory = self.directories.get_or_create_directory(os.path.dirname(path))
-        directory, filename = self.directories.resolve_path(path)
+        normalized_path = self._normalize_path(path)
+        directory = self.directories.get_or_create_directory(
+            os.path.dirname(normalized_path)
+        )
+        directory, filename = self.directories.resolve_path(normalized_path)
         directory.add_file(filename)
 
-        success = self.storage.put(path, data, priority)
+        success = self.storage.put(normalized_path, data, priority)
 
-        self._set_priority_internal(path, priority)
+        self._set_priority_internal(normalized_path, priority)
 
         duration_ms = (time.time() - start_time) * 1000
 
         if self.logger:
             self.logger.log(
                 OperationType.WRITE,
-                path,
+                normalized_path,
                 size=len(data),
                 priority=priority,
                 duration_ms=duration_ms,
@@ -212,13 +234,14 @@ class MemFileSystem:
         if self._closed:
             raise RuntimeError("File system is closed")
 
-        result = self.storage.remove(path)
+        normalized_path = self._normalize_path(path)
+        result = self.storage.remove(normalized_path)
 
         if self.logger:
-            self.logger.log(OperationType.DELETE, path, success=result)
+            self.logger.log(OperationType.DELETE, normalized_path, success=result)
 
         if result:
-            directory, filename = self.directories.resolve_path(path)
+            directory, filename = self.directories.resolve_path(normalized_path)
             if directory:
                 directory.remove_file(filename)
 
@@ -235,7 +258,8 @@ class MemFileSystem:
             True if exists.
         """
 
-        return self.storage.contains(path)
+        normalized_path = self._normalize_path(path)
+        return self.storage.contains(normalized_path)
 
     def mkdir(self, path: str) -> bool:
         """
@@ -247,11 +271,11 @@ class MemFileSystem:
         Returns:
             True if created.
         """
-
-        result = self.directories.mkdir(path)
+        normalized_path = self._normalize_path(path)
+        result = self.directories.mkdir(normalized_path)
 
         if self.logger:
-            self.logger.log(OperationType.MKDIR, path)
+            self.logger.log(OperationType.MKDIR, normalized_path)
 
         return result
 
@@ -265,11 +289,11 @@ class MemFileSystem:
         Returns:
             True if removed.
         """
-
-        result = self.directories.rmdir(path)
+        normalized_path = self._normalize_path(path)
+        result = self.directories.rmdir(normalized_path)
 
         if self.logger:
-            self.logger.log(OperationType.RMDIR, path, success=result)
+            self.logger.log(OperationType.RMDIR, normalized_path, success=result)
 
         return result
 
@@ -283,8 +307,8 @@ class MemFileSystem:
         Returns:
             List of names.
         """
-
-        return self.directories.listdir(path)
+        normalized_path = self._normalize_path(path)
+        return self.directories.listdir(normalized_path)
 
     def glob(self, pattern: str) -> List[str]:
         """
@@ -296,11 +320,12 @@ class MemFileSystem:
         Returns:
             List of matching paths.
         """
-        # Normalize pattern - ensure it starts with /
-        if not pattern.startswith("/"):
-            pattern = "/" + pattern
+        # Normalize pattern - ensure it starts with / and uses /
+        normalized_pattern = self._normalize_path(pattern)
+        if not normalized_pattern.startswith("/"):
+            normalized_pattern = "/" + normalized_pattern
 
-        return self.directories.glob(pattern)
+        return self.directories.glob(normalized_pattern)
 
     def set_priority(self, path: str, priority: int) -> bool:
         """
@@ -313,13 +338,13 @@ class MemFileSystem:
         Returns:
             True if set.
         """
-
-        result = self._set_priority_internal(path, priority)
+        normalized_path = self._normalize_path(path)
+        result = self._set_priority_internal(normalized_path, priority)
 
         if self.logger:
             self.logger.log(
                 OperationType.SET_PRIORITY,
-                path,
+                normalized_path,
                 priority=priority,
                 success=result,
             )
@@ -328,12 +353,13 @@ class MemFileSystem:
 
     def _set_priority_internal(self, path: str, priority: int) -> bool:
         """Internal priority setter."""
+        normalized_path = self._normalize_path(path)
         with self._lock:
-            if not self.storage.contains(path):
+            if not self.storage.contains(normalized_path):
                 return False
 
-            self._file_priorities[path] = priority
-            return self.storage.set_priority(path, priority)
+            self._file_priorities[normalized_path] = priority
+            return self.storage.set_priority(normalized_path, priority)
 
     def get_priority(self, path: str) -> Optional[int]:
         """
@@ -345,9 +371,9 @@ class MemFileSystem:
         Returns:
             Priority or None.
         """
-
+        normalized_path = self._normalize_path(path)
         with self._lock:
-            return self._file_priorities.get(path)
+            return self._file_priorities.get(normalized_path)
 
     def preload(self, path: str, priority: int = 5) -> str:
         """
@@ -360,39 +386,11 @@ class MemFileSystem:
         Returns:
             Task ID.
         """
-
+        normalized_path = self._normalize_path(path)
         if self.logger:
-            self.logger.log(OperationType.PRELOAD, path, priority=priority)
+            self.logger.log(OperationType.PRELOAD, normalized_path, priority=priority)
 
-        return self.storage.preload(path, priority)
-
-    def gc(self, target_usage: float = 0.5) -> int:
-        """
-        Trigger garbage collection.
-
-        Args:
-            target_usage: Target memory usage (0-1).
-
-        Returns:
-            Number of files swapped out.
-        """
-        if self.logger:
-            self.logger.log(
-                OperationType.GC,
-                "system",
-                metadata={"target_usage": target_usage},
-            )
-
-        return self.storage.gc(target_usage)
-
-    def get_stats(self) -> dict:
-        """
-        Get file system statistics.
-
-        Returns:
-            Statistics dictionary.
-        """
-        return self.storage.get_stats()
+        return self.storage.preload(normalized_path, priority)
 
     def get_file_info(self, path: str) -> Optional[dict]:
         """
@@ -404,8 +402,8 @@ class MemFileSystem:
         Returns:
             File info or None.
         """
-
-        location = self.storage.get_file_location(path)
+        normalized_path = self._normalize_path(path)
+        location = self.storage.get_file_location(normalized_path)
 
         if location == "unknown":
             return None
@@ -413,15 +411,15 @@ class MemFileSystem:
         info = {
             "path": path,
             "location": location,
-            "priority": self.get_priority(path),
+            "priority": self.get_priority(normalized_path),
         }
 
         if location == "memory":
-            mem_info = self.storage.memory.get_file_info(path)
+            mem_info = self.storage.memory.get_file_info(normalized_path)
             if mem_info:
                 info.update(mem_info)
         elif location == "real":
-            real_info = self.storage.real_storage.get_file_info(path)
+            real_info = self.storage.real_storage.get_file_info(normalized_path)
             if real_info:
                 info.update(real_info)
 
@@ -463,9 +461,27 @@ class MemFileSystem:
 
         Args:
             wait: Wait for pending operations.
+                  If False, returns immediately and operations complete in background.
         """
         self._closed = True
-        self.storage.shutdown(wait=wait)
+        pending = self.storage.shutdown(wait=wait)
+
+        if not wait and pending > 0:
+            # Background shutdown - tasks will complete asynchronously
+            pass
+
+        return pending
+
+    def shutdown_async(self) -> int:
+        """
+        Initiate asynchronous shutdown.
+
+        Returns immediately. Background tasks continue executing.
+
+        Returns:
+            Number of pending operations that will complete in background.
+        """
+        return self.shutdown(wait=False)
 
     def __enter__(self):
         """Context manager entry."""

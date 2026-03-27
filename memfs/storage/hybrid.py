@@ -552,15 +552,19 @@ class HybridStorage:
                 return "real"
             return "unknown"
 
-    def shutdown(self, wait: bool = True):
+    def shutdown(self, wait: bool = True) -> int:
         """
         Shut down storage.
 
         Args:
             wait: Whether to wait for pending operations.
+
+        Returns:
+            Number of pending operations if not waiting.
         """
-        self.worker.shutdown(wait=wait)
+        pending = self.worker.shutdown(wait=wait)
         self.real_storage.shutdown()
+        return pending
 
     def _sync_persisted_files_to_directories(self):
         """Sync persisted files from disk to directory manager."""
