@@ -1,6 +1,6 @@
 # MemFS - Memory-First File System
 
-> 自用，这是一个完全AI构建的python包
+> **自用项目**：这是一个完全由 AI 构建和维护的 Python 包。不主动维护，如有需要欢迎 fork 后在自己的仓库中修改维护。
 
 **内存优先的虚拟文件系统**
 
@@ -26,14 +26,11 @@ MemFS 是一个高性能的 Python 内存文件系统，提供虚拟目录结构
 ## 📦 安装
 
 ```bash
-# 基础安装（仅标准库）
-pip install -e .
-
-# 完整安装（包含所有压缩算法）
-pip install -e ".[full]"
+# 安装依赖
+pip install -r requirements.txt
 
 # 开发安装
-pip install -e ".[dev]"
+pip install -e .
 ```
 
 ### 依赖说明
@@ -77,10 +74,10 @@ from memfs import MemFileSystem
 
 # 创建文件系统
 fs = MemFileSystem(
-    memory_limit=0.8,           # 内存限制 80%
-    persist_path='./memfs_data', # 持久化路径
-    compression='gzip',         # 压缩算法
-    worker_threads=4            # 工作线程数
+    memory_limit=0.8,              # 内存限制 80%
+    persist_path='./memfs_data',   # 持久化路径
+    storage_mode='persist',        # 存储模式：'temp' 或 'persist'
+    worker_threads=4               # 工作线程数
 )
 
 # 文件操作
@@ -111,8 +108,7 @@ fs.shutdown()
 fs = MemFileSystem(
     memory_limit=0.8,              # 内存使用限制 (0-1)，默认 0.8
     persist_path='./memfs_data',   # 持久化存储路径，默认 './memfs_data'
-    compression='gzip',            # 压缩算法：none/gzip/lz4/zstd，默认 'gzip'
-    compression_level=6,           # 压缩级别 (1-9)，默认 6
+    storage_mode='temp',           # 存储模式：'temp' 或 'persist'，默认 'temp'
     worker_threads=4,              # 后台工作线程数，默认 4
     enable_logging=True,           # 启用操作日志，默认 True
     log_path='logs/memfs.log',     # 日志文件路径，默认 None
@@ -126,8 +122,7 @@ fs = MemFileSystem(
 |------|------|--------|------|
 | `memory_limit` | float | 0.8 | 内存使用限制，范围 0-1，表示系统内存的百分比 |
 | `persist_path` | str | './memfs_data' | 磁盘持久化存储的基础路径 |
-| `compression` | str | 'gzip' | 压缩算法：`none`/`gzip`/`lz4`/`zstd` |
-| `compression_level` | int | 6 | 压缩级别，范围 1-9，越高压缩率越好但速度越慢 |
+| `storage_mode` | str | 'temp' | 存储模式：`'temp'`（临时，关闭时清理）或 `'persist'`（关闭后保留文件） |
 | `worker_threads` | int | 4 | 后台工作线程数量，影响并发换入换出性能 |
 | `enable_logging` | bool | True | 是否启用操作日志记录 |
 | `log_path` | str | None | 操作日志文件路径，None 表示仅内存存储 |
@@ -379,7 +374,7 @@ fs.write('/temp/process_1.dat', large_data, priority=2)
 
 ### 2. 缓存层
 ```python
-fs = MemFileSystem(memory_limit=0.5, compression='lz4')
+fs = MemFileSystem(memory_limit=0.5)
 
 # 缓存热点数据
 def get_data(key):
@@ -416,12 +411,11 @@ for next_file in upcoming_files:
 
 1. **线程安全**：所有操作都是线程安全的，可以在多线程环境中使用
 2. **资源清理**：使用完毕后调用 `shutdown()` 或 `close()` 释放资源
-3. **路径格式**：所有路径以 `/` 为根目录
+3. **路径格式**：所有路径以 `/` 为根目录（Linux 风格路径，自动转换 Windows 反斜杠）
 4. **内存限制**：合理设置 `memory_limit`，避免占用过多系统内存
-5. **压缩选择**：
-   - `gzip`：平衡性能和压缩率（推荐）
-   - `lz4`：极致速度，压缩率较低
-   - `zstd`：高压缩率，速度适中
+5. **存储模式**：
+   - `'temp'`：临时存储，关闭时删除所有文件（默认）
+   - `'persist'`：持久化存储，关闭后保留文件
 
 ## 🧪 运行测试
 
@@ -443,14 +437,6 @@ pytest tests/test_core.py::TestMemFileSystem::test_write_read -v
 ```bash
 python examples.py
 ```
-
-## 📄 项目说明
-
-**这是一个自用项目，完全由 AI 构建和维护。**
-
-- **维护**：本项目不积极维护，仅根据个人需求进行更新。
-- **贡献**：请不要提交 Issue 或 Pull Request。如果您觉得有用，欢迎 fork 后在自己的仓库中修改和维护。
-- **支持**：不提供官方支持，使用风险自负。
 
 ## 📄 许可证
 

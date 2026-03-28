@@ -1,6 +1,6 @@
 # MemFS - Memory-First File System
 
-> Personal use: This is a Python package built entirely by AI
+> **Personal Use Project**: This is a Python package built and maintained entirely by AI. Not actively maintained - feel free to fork and modify in your own repository if needed.
 
 **Memory-First Virtual File System**
 
@@ -11,7 +11,7 @@
 
 ## 📖 Introduction
 
-MemFS is a high-performance Python memory file system that provides a virtual directory structure, prioritizes storing data in memory, and supports automatic persistence to disk. It features advanced capabilities such as intelligent swap-in/swap-out, file tracking, priority management, and asynchronous operations.
+MemFS is a high-performance Python memory file system that provides a virtual directory structure, prioritizes storing data in memory, and supports automatic persistence to disk. It features intelligent swap-in/swap-out, file tracking, priority management, and asynchronous operations.
 
 ### Core Features
 
@@ -26,14 +26,11 @@ MemFS is a high-performance Python memory file system that provides a virtual di
 ## 📦 Installation
 
 ```bash
-# Basic installation (standard library only)
-pip install -e .
-
-# Full installation (all compression algorithms)
-pip install -e ".[full]"
+# Install dependencies
+pip install -r requirements.txt
 
 # Development installation
-pip install -e ".[dev]"
+pip install -e .
 ```
 
 ### Dependencies
@@ -77,10 +74,10 @@ from memfs import MemFileSystem
 
 # Create file system
 fs = MemFileSystem(
-    memory_limit=0.8,           # Memory limit 80%
-    persist_path='./memfs_data', # Persistence path
-    compression='gzip',         # Compression algorithm
-    worker_threads=4            # Worker thread count
+    memory_limit=0.8,              # Memory limit 80%
+    persist_path='./memfs_data',   # Persistence path
+    storage_mode='persist',        # Storage mode: 'temp' or 'persist'
+    worker_threads=4               # Worker thread count
 )
 
 # File operations
@@ -111,8 +108,7 @@ fs.shutdown()
 fs = MemFileSystem(
     memory_limit=0.8,              # Memory usage limit (0-1), default 0.8
     persist_path='./memfs_data',   # Persistent storage path, default './memfs_data'
-    compression='gzip',            # Compression: none/gzip/lz4/zstd, default 'gzip'
-    compression_level=6,           # Compression level (1-9), default 6
+    storage_mode='temp',           # Storage mode: 'temp' or 'persist', default 'temp'
     worker_threads=4,              # Background worker threads, default 4
     enable_logging=True,           # Enable operation logging, default True
     log_path='logs/memfs.log',     # Log file path, default None
@@ -126,8 +122,7 @@ fs = MemFileSystem(
 |-----------|------|---------|-------------|
 | `memory_limit` | float | 0.8 | Memory usage limit, range 0-1, percentage of system memory |
 | `persist_path` | str | './memfs_data' | Base path for disk persistent storage |
-| `compression` | str | 'gzip' | Compression algorithm: `none`/`gzip`/`lz4`/`zstd` |
-| `compression_level` | int | 6 | Compression level, range 1-9, higher means better compression but slower |
+| `storage_mode` | str | 'temp' | Storage mode: `'temp'` (temporary, cleanup on shutdown) or `'persist'` (keep files after shutdown) |
 | `worker_threads` | int | 4 | Number of background worker threads, affects concurrent swap-in/out performance |
 | `enable_logging` | bool | True | Whether to enable operation logging |
 | `log_path` | str | None | Operation log file path, None means in-memory storage only |
@@ -379,7 +374,7 @@ fs.write('/temp/process_1.dat', large_data, priority=2)
 
 ### 2. Cache Layer
 ```python
-fs = MemFileSystem(memory_limit=0.5, compression='lz4')
+fs = MemFileSystem(memory_limit=0.5)
 
 # Cache hot data
 def get_data(key):
@@ -416,12 +411,11 @@ for next_file in upcoming_files:
 
 1. **Thread-Safe**: All operations are thread-safe and can be used in multi-threaded environments
 2. **Resource Cleanup**: Call `shutdown()` or `close()` after use to release resources
-3. **Path Format**: All paths use `/` as the root directory
+3. **Path Format**: All paths use `/` as the root directory (Linux-style paths, auto-converts Windows backslashes)
 4. **Memory Limit**: Set `memory_limit` appropriately to avoid consuming excessive system memory
-5. **Compression Options**:
-   - `gzip`: Balanced performance and compression ratio (recommended)
-   - `lz4`: Extreme speed, lower compression ratio
-   - `zstd`: High compression ratio, moderate speed
+5. **Storage Mode**:
+   - `'temp'`: Temporary storage, all files are deleted on shutdown (default)
+   - `'persist'`: Persistent storage, files are kept after shutdown
 
 ## 🧪 Running Tests
 
@@ -443,14 +437,6 @@ See `examples.py` for more usage examples:
 ```bash
 python examples.py
 ```
-
-## 📄 Project Note
-
-**This is a personal-use project, built and maintained entirely by AI.**
-
-- **Maintenance**: This project is not actively maintained. Updates are made as needed for personal use.
-- **Contributions**: Please do not submit issues or pull requests. If you find this useful, feel free to fork it and make modifications in your own repository.
-- **Support**: No official support is provided. Use at your own risk.
 
 ## 📄 License
 

@@ -146,5 +146,17 @@ pytest tests/test_core.py::TestMemFileSystem::test_write_read -v
 
 ---
 
-**最后更新**：2026-03-27  
-**版本**：0.2.0
+**最后更新**：2026-03-28  
+**版本**：0.2.1
+
+---
+
+## 更新日志
+
+### v0.2.1 (2026-03-28)
+- 删除压缩相关功能（compression、compression_level 参数已移除）
+- 添加 `storage_mode` 参数（'temp'/'persist'）
+- 添加 `clear_persist()` 函数用于清理持久化数据
+- 更新 README 文档，删除压缩相关内容
+- 添加中英文语言切换链接
+- 项目说明更新为自用项目，不主动维护
