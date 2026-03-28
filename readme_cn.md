@@ -26,10 +26,16 @@ MemFS 是一个高性能的 Python 内存文件系统，提供虚拟目录结构
 ## 📦 安装
 
 ```bash
-# 安装依赖
-pip install -r requirements.txt
+# 基础安装（仅标准库）
+pip install memfs
+
+# 推荐依赖安装
+pip install "memfs[recommended]"
 
 # 开发安装
+pip install "memfs[dev]"
+
+# 本地开发（从源码）
 pip install -e .
 ```
 

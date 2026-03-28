@@ -33,15 +33,6 @@ dependencies = []
 recommended = [
     "psutil >= 5.9.0",
 ]
-compression = [
-    "lz4 >= 4.0.0",
-    "zstandard >= 1.5.0",
-]
-full = [
-    "psutil >= 5.9.0",
-    "lz4 >= 4.0.0",
-    "zstandard >= 1.5.0",
-]
 dev = [
     "pytest >= 7.0.0",
     "pytest-cov >= 4.0.0",

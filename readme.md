@@ -32,9 +32,6 @@ pip install memfs
 # Installation with recommended dependencies
 pip install "memfs[recommended]"
 
-# Full installation (all compression algorithms)
-pip install "memfs[full]"
-
 # Development installation
 pip install "memfs[dev]"
 
@@ -48,8 +45,6 @@ pip install -e .
 |------------|------|-------------|
 | Python 3.8+ | Required | Minimum Python version |
 | psutil | Optional | Memory and disk monitoring (recommended) |
-| lz4 | Optional | Fast compression |
-| zstandard | Optional | High compression ratio |
 | pytest | Development | Testing framework |
 
 ## 🚀 Quick Start
