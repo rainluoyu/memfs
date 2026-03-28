@@ -92,6 +92,13 @@ pytest tests/test_core.py::TestMemFileSystem::test_write_read -v
 
 ## e) 项目代码地图
 
+### 文档文件
+
+| 文件 | 功能说明 |
+|------|----------|
+| `README.md` | 项目英文文档（包含中英文语言切换链接） |
+| `readme_cn.md` | 项目中文文档（包含中英文语言切换链接） |
+
 ### 核心类与函数
 
 | 文件 | 核心类/函数 | 功能说明 |
