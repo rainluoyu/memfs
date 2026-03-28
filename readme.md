@@ -444,9 +444,13 @@ See `examples.py` for more usage examples:
 python examples.py
 ```
 
-## 🤝 Contributing
+## 📄 Project Note
 
-Issues and Pull Requests are welcome!
+**This is a personal-use project, built and maintained entirely by AI.**
+
+- **Maintenance**: This project is not actively maintained. Updates are made as needed for personal use.
+- **Contributions**: Please do not submit issues or pull requests. If you find this useful, feel free to fork it and make modifications in your own repository.
+- **Support**: No official support is provided. Use at your own risk.
 
 ## 📄 License
 

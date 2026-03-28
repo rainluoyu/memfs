@@ -444,9 +444,13 @@ pytest tests/test_core.py::TestMemFileSystem::test_write_read -v
 python examples.py
 ```
 
-## 🤝 贡献
+## 📄 项目说明
 
-欢迎提交 Issue 和 Pull Request！
+**这是一个自用项目，完全由 AI 构建和维护。**
+
+- **维护**：本项目不积极维护，仅根据个人需求进行更新。
+- **贡献**：请不要提交 Issue 或 Pull Request。如果您觉得有用，欢迎 fork 后在自己的仓库中修改和维护。
+- **支持**：不提供官方支持，使用风险自负。
 
 ## 📄 许可证
 
