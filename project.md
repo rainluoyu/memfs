@@ -92,6 +92,14 @@ pytest tests/test_core.py::TestMemFileSystem::test_write_read -v
 
 ## e) 项目代码地图
 
+### 打包配置文件
+
+| 文件 | 功能说明 |
+|------|----------|
+| `pyproject.toml` | Python 包配置文件（版本 0.1.0，MIT License，作者 Luoyu） |
+| `MANIFEST.in` | 指定分发包包含的文件（README、LICENSE、examples.py、tests/） |
+| `LICENSE` | MIT 许可证文件 |
+
 ### 文档文件
 
 | 文件 | 功能说明 |

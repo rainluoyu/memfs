@@ -1,0 +1,70 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "memfs"
+version = "0.1.0"
+description = "MemFS - Memory-First File System. A virtual file system that prioritizes in-memory storage with automatic disk tiering, access tracking, and garbage collection."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "Luoyu", email = "rainluoyu@outlook.com" }
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Filesystems",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+keywords = ["memory", "filesystem", "virtual-fs", "in-memory", "caching"]
+requires-python = ">=3.8"
+dependencies = []
+
+[project.optional-dependencies]
+recommended = [
+    "psutil >= 5.9.0",
+]
+compression = [
+    "lz4 >= 4.0.0",
+    "zstandard >= 1.5.0",
+]
+full = [
+    "psutil >= 5.9.0",
+    "lz4 >= 4.0.0",
+    "zstandard >= 1.5.0",
+]
+dev = [
+    "pytest >= 7.0.0",
+    "pytest-cov >= 4.0.0",
+    "black >= 23.0.0",
+    "mypy >= 1.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/rainluoyu/memfs"
+Repository = "https://github.com/rainluoyu/memfs"
+Issues = "https://github.com/rainluoyu/memfs/issues"
+
+[tool.setuptools.packages.find]
+include = ["memfs*"]
+
+[tool.black]
+line-length = 100
+target-version = ["py38"]
+include = '\.pyi?$'
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true

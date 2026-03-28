@@ -83,7 +83,7 @@ class MemFileSystem:
         Converts Windows-style backslashes to forward slashes for internal consistency.
 
         Args:
-            path: Input path (may contain \ or /).
+            path: Input path (may contain backslash or forward slash).
 
         Returns:
             Normalized path with forward slashes only.
