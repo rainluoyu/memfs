@@ -11,8 +11,10 @@ from pathlib import Path
 import memfs
 from memfs.core.instance_manager import (
     InstanceManager,
+    InstanceConflictError,
     get_global_instance_manager,
     reset_global_instance_manager,
+    get_unique_temp_path,
 )
 
 
@@ -39,15 +41,26 @@ class TestInstanceManager:
         assert manager.get_instance_count() == 1
 
     def test_same_path_returns_same_instance(self, tmp_path):
-        """Test that same persist_path returns same instance."""
+        """Test that same persist_path returns same instance (persist mode only)."""
         persist_path = str(tmp_path / "data")
         manager = InstanceManager()
 
-        fs1 = manager.get_or_create_instance(persist_path=persist_path)
-        fs2 = manager.get_or_create_instance(persist_path=persist_path)
+        # Persist mode can share path
+        fs1 = manager.get_or_create_instance(
+            persist_path=persist_path, storage_mode="persist"
+        )
+        fs2 = manager.get_or_create_instance(
+            persist_path=persist_path, storage_mode="persist"
+        )
 
         assert fs1 is fs2
         assert manager.get_instance_count() == 1
+
+        # Temp mode cannot share - should raise error
+        with pytest.raises(InstanceConflictError):
+            manager.get_or_create_instance(
+                persist_path=persist_path, storage_mode="temp"
+            )
 
     def test_different_paths_create_different_instances(self, tmp_path):
         """Test that different persist_paths create different instances."""
@@ -63,12 +76,17 @@ class TestInstanceManager:
         assert fs1._persist_path != fs2._persist_path
 
     def test_reference_counting(self, tmp_path):
-        """Test reference counting mechanism."""
+        """Test reference counting mechanism (persist mode only)."""
         persist_path = str(tmp_path / "data")
         manager = InstanceManager()
 
-        fs1 = manager.get_or_create_instance(persist_path=persist_path)
-        fs2 = manager.get_or_create_instance(persist_path=persist_path)
+        # Persist mode can share with reference counting
+        fs1 = manager.get_or_create_instance(
+            persist_path=persist_path, storage_mode="persist"
+        )
+        fs2 = manager.get_or_create_instance(
+            persist_path=persist_path, storage_mode="persist"
+        )
 
         assert fs1 is fs2
         stats = manager.get_instance_stats()
@@ -181,11 +199,12 @@ class TestMultiInstanceIsolation:
         assert not (dir_b / "file_a.txt").exists()
 
     def test_same_instance_retrieval(self, tmp_path):
-        """Test that same persist_path returns same instance."""
+        """Test that same persist_path returns same instance (persist mode only)."""
         persist_path = str(tmp_path / "data")
 
-        fs1 = memfs.init(persist_path=persist_path)
-        fs2 = memfs.init(persist_path=persist_path)
+        # Persist mode can share
+        fs1 = memfs.init(persist_path=persist_path, storage_mode="persist")
+        fs2 = memfs.init(persist_path=persist_path, storage_mode="persist")
 
         assert fs1 is fs2
 
@@ -194,6 +213,11 @@ class TestMultiInstanceIsolation:
 
         # Read with fs2 (should see same data)
         assert fs2.read("/test.txt") == b"hello"
+
+        # Temp mode cannot share - must use different path
+        temp_path = str(tmp_path / "temp_data")
+        fs3 = memfs.init(persist_path=temp_path, storage_mode="temp")
+        assert fs3 is not fs1
 
 
 class TestInstanceLifecycle:
@@ -262,12 +286,13 @@ class TestInstanceLifecycle:
         assert stats[key_a]["storage_mode"] == "temp"
 
     def test_reference_count_with_multiple_inits(self, tmp_path):
-        """Test reference count with multiple inits."""
+        """Test reference count with multiple inits (persist mode only)."""
         persist_path = str(tmp_path / "data")
 
-        fs1 = memfs.init(persist_path=persist_path)
-        fs2 = memfs.init(persist_path=persist_path)
-        fs3 = memfs.init(persist_path=persist_path)
+        # Persist mode can share with reference counting
+        fs1 = memfs.init(persist_path=persist_path, storage_mode="persist")
+        fs2 = memfs.init(persist_path=persist_path, storage_mode="persist")
+        fs3 = memfs.init(persist_path=persist_path, storage_mode="persist")
 
         assert fs1 is fs2 is fs3
         assert memfs.get_instance_count() == 1
@@ -305,8 +330,8 @@ class TestInstanceLifecycle:
         assert fs2._closed is True
 
 
-class TestLegacyMode:
-    """Test legacy mode (named_instance=False)."""
+class TestTempModeConflict:
+    """Test temp mode path conflict detection."""
 
     def setup_method(self):
         """Reset before each test."""
@@ -316,27 +341,104 @@ class TestLegacyMode:
         """Cleanup after each test."""
         reset_global_instance_manager()
 
-    def test_legacy_mode_always_creates_new(self, tmp_path):
-        """Test that legacy mode always creates new instance."""
+    def test_temp_mode_cannot_share_path_with_temp(self, tmp_path):
+        """Test that temp mode instances cannot share the same path."""
         persist_path = str(tmp_path / "data")
 
-        fs1 = memfs.init(persist_path=persist_path, named_instance=False)
-        fs2 = memfs.init(persist_path=persist_path, named_instance=False)
+        # First temp instance should succeed
+        fs1 = memfs.init(persist_path=persist_path, storage_mode="temp")
 
-        # In legacy mode, fs1 should be closed and fs2 is new
-        assert fs1._closed is True
-        assert fs2._closed is False
+        # Second temp instance with same path should raise InstanceConflictError
+        with pytest.raises(InstanceConflictError) as exc_info:
+            memfs.init(persist_path=persist_path, storage_mode="temp")
+
+        assert "Cannot create temp mode instance" in str(exc_info.value)
+        assert persist_path in str(exc_info.value)
+
+    def test_temp_mode_cannot_share_path_with_persist(self, tmp_path):
+        """Test that temp mode cannot overlap with existing persist instance."""
+        persist_path = str(tmp_path / "data")
+
+        # First persist instance
+        fs1 = memfs.init(persist_path=persist_path, storage_mode="persist")
+
+        # Temp instance with same path should raise InstanceConflictError
+        with pytest.raises(InstanceConflictError) as exc_info:
+            memfs.init(persist_path=persist_path, storage_mode="temp")
+
+        assert "Cannot create temp mode instance" in str(exc_info.value)
+
+    def test_persist_mode_cannot_share_path_with_temp(self, tmp_path):
+        """Test that persist mode cannot overlap with existing temp instance."""
+        persist_path = str(tmp_path / "data")
+
+        # First temp instance
+        fs1 = memfs.init(persist_path=persist_path, storage_mode="temp")
+
+        # Persist instance with same path should raise InstanceConflictError
+        with pytest.raises(InstanceConflictError) as exc_info:
+            memfs.init(persist_path=persist_path, storage_mode="persist")
+
+        assert "Cannot create persist mode instance" in str(exc_info.value)
+
+    def test_persist_mode_can_share_with_persist(self, tmp_path):
+        """Test that persist mode instances can share the same path."""
+        persist_path = str(tmp_path / "data")
+
+        fs1 = memfs.init(persist_path=persist_path, storage_mode="persist")
+        fs2 = memfs.init(persist_path=persist_path, storage_mode="persist")
+
+        # Should return same instance
+        assert fs1 is fs2
+        assert memfs.get_instance_count() == 1
+
+        # Check reference count
+        stats = memfs.get_instance_stats()
+        key = str(Path(persist_path).resolve())
+        assert stats[key]["ref_count"] == 2
+
+    def test_auto_generated_temp_path(self):
+        """Test that auto-generated temp paths are unique."""
+        fs1 = memfs.init()  # Auto-generates unique path
+        fs2 = memfs.init()  # Auto-generates another unique path
+
+        # Should be different instances with different paths
         assert fs1 is not fs2
+        assert fs1._persist_path != fs2._persist_path
+        assert memfs.get_instance_count() == 2
 
-    def test_legacy_mode_close(self, tmp_path):
-        """Test closing in legacy mode."""
-        persist_path = str(tmp_path / "data")
+        # Both should be temp mode
+        assert fs1._storage_mode == "temp"
+        assert fs2._storage_mode == "temp"
 
-        fs = memfs.init(persist_path=persist_path, named_instance=False)
-        result = memfs.close(fs, named_instance=False)
+    def test_get_unique_temp_path(self):
+        """Test get_unique_temp_path() function."""
+        path1 = get_unique_temp_path()
+        path2 = get_unique_temp_path()
 
-        assert result is True
-        assert fs._closed is True
+        # Should be different paths
+        assert path1 != path2
+
+        # Should be under system temp directory
+        import tempfile
+
+        temp_base = Path(tempfile.gettempdir())
+        assert Path(path1).is_relative_to(temp_base)
+        assert Path(path2).is_relative_to(temp_base)
+
+        # Should have memfs_ prefix
+        assert Path(path1).name.startswith("memfs_")
+        assert Path(path2).name.startswith("memfs_")
+
+    def test_init_without_path_uses_auto_temp(self):
+        """Test that init() without persist_path auto-generates temp path."""
+        fs1 = memfs.init()
+        fs2 = memfs.init()
+
+        # Both should have auto-generated paths
+        assert "memfs_" in Path(fs1._persist_path).name
+        assert "memfs_" in Path(fs2._persist_path).name
+        assert fs1._persist_path != fs2._persist_path
 
 
 class TestRealWorldScenario:

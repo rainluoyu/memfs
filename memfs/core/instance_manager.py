@@ -1,13 +1,32 @@
 """
 Multi-instance manager for MemFS.
 Supports multiple independent instances with reference counting.
+
+Instance Conflict Rules:
+- Temp mode: Each instance must use a unique persist_path. Cannot overlap with existing temp or persist instances.
+- Persist mode: Multiple instances can share the same persist_path (reference counted).
+- Temp mode cannot overlap with persist mode on the same path.
 """
 
+import tempfile
 import threading
 from typing import Dict, Optional
 from pathlib import Path
 
 from ..core.filesystem import MemFileSystem
+
+
+class InstanceConflictError(Exception):
+    """
+    Raised when attempting to create conflicting instances.
+
+    This occurs when:
+    - Trying to create a temp mode instance with a path already used by another temp instance
+    - Trying to create a temp mode instance with a path used by a persist instance
+    - Trying to create a persist mode instance with a path used by a temp instance
+    """
+
+    pass
 
 
 class InstanceManager:
@@ -18,6 +37,7 @@ class InstanceManager:
     - Named instances based on persist_path
     - Reference counting for automatic lifecycle management
     - Thread-safe instance creation and retrieval
+    - Temp mode path conflict detection
     """
 
     def __init__(self):
@@ -38,9 +58,30 @@ class InstanceManager:
         """
         return str(Path(path).expanduser().resolve())
 
+    @staticmethod
+    def get_unique_temp_path() -> str:
+        """
+        Generate a unique temporary path for temp mode instances.
+
+        Creates a temporary directory under system temp folder with unique name.
+        The directory is NOT created immediately - this just returns a unique path.
+
+        Returns:
+            Unique temporary path string.
+
+        Example:
+            >>> path = InstanceManager.get_unique_temp_path()
+            >>> # Returns something like: /tmp/memfs_a7b3c9d2e1f4
+        """
+        import uuid
+
+        temp_base = tempfile.gettempdir()
+        unique_name = f"memfs_{uuid.uuid4().hex[:12]}"
+        return str(Path(temp_base) / unique_name)
+
     def get_or_create_instance(
         self,
-        persist_path: str = "./memfs_data",
+        persist_path: Optional[str] = None,
         memory_limit: float = 0.8,
         storage_mode: str = "temp",
         worker_threads: int = 4,
@@ -51,11 +92,16 @@ class InstanceManager:
         """
         Get or create a MemFileSystem instance for the given persist_path.
 
-        If an instance with the same persist_path already exists, returns it
-        and increments the reference count. Otherwise, creates a new instance.
+        Instance Conflict Rules:
+        - Temp mode: Must use unique path. Cannot overlap with any existing instance (temp or persist).
+        - Persist mode: Can share path with other persist instances (reference counted).
+        - Temp mode cannot overlap with persist mode on the same path.
+
+        If persist_path is None and storage_mode is "temp", automatically generates
+        a unique temporary path using get_unique_temp_path().
 
         Args:
-            persist_path: Root path for real files (used as instance key).
+            persist_path: Root path for real files. If None and storage_mode="temp", auto-generates unique path.
             memory_limit: Memory usage limit (0-1).
             storage_mode: Storage mode - "temp" or "persist".
             worker_threads: Number of background worker threads.
@@ -65,13 +111,59 @@ class InstanceManager:
 
         Returns:
             MemFileSystem instance.
+
+        Raises:
+            InstanceConflictError: If trying to create conflicting temp mode instance.
+
+        Example:
+            >>> # Temp mode with auto-generated unique path
+            >>> fs1 = manager.get_or_create_instance(storage_mode="temp")
+            >>> fs2 = manager.get_or_create_instance(storage_mode="temp")  # Different path
+
+            >>> # Persist mode can share path
+            >>> fs3 = manager.get_or_create_instance(persist_path="./data", storage_mode="persist")
+            >>> fs4 = manager.get_or_create_instance(persist_path="./data", storage_mode="persist")  # Same instance
+
+            >>> # Temp mode conflict - raises InstanceConflictError
+            >>> fs5 = manager.get_or_create_instance(persist_path="./data", storage_mode="temp")
+            Traceback (most recent call last):
+                ...
+            InstanceConflictError: ...
         """
+        # Auto-generate unique path for temp mode if not specified
+        if persist_path is None:
+            if storage_mode == "temp":
+                persist_path = self.get_unique_temp_path()
+            else:
+                persist_path = "./memfs_data"
+
         instance_key = self._normalize_path(persist_path)
 
         with self._lock:
             if instance_key in self._instances:
+                existing_fs = self._instances[instance_key]
+                existing_mode = existing_fs._storage_mode
+
+                # Temp mode conflicts with any existing instance on same path
+                if storage_mode == "temp":
+                    raise InstanceConflictError(
+                        f"Cannot create temp mode instance with persist_path '{persist_path}' "
+                        f"because it conflicts with existing {existing_mode} mode instance. "
+                        f"Temp mode instances must use unique paths. "
+                        f"Use get_unique_temp_path() to generate a unique path or use persist mode."
+                    )
+
+                # Persist mode can share with other persist instances
+                if existing_mode == "temp":
+                    raise InstanceConflictError(
+                        f"Cannot create persist mode instance with persist_path '{persist_path}' "
+                        f"because it conflicts with existing temp mode instance. "
+                        f"Temp mode instances require exclusive use of the path."
+                    )
+
+                # Same persist mode - increment ref count and return existing
                 self._ref_counts[instance_key] += 1
-                return self._instances[instance_key]
+                return existing_fs
 
             config = {
                 "memory_limit": memory_limit,
@@ -181,6 +273,23 @@ class InstanceManager:
             return instance_key in self._instances
 
 
+def get_unique_temp_path() -> str:
+    """
+    Generate a unique temporary path for temp mode instances.
+
+    Convenience function that delegates to InstanceManager.get_unique_temp_path().
+
+    Returns:
+        Unique temporary path string.
+
+    Example:
+        >>> import memfs
+        >>> path = memfs.get_unique_temp_path()
+        >>> fs = memfs.init(persist_path=path, storage_mode="temp")
+    """
+    return InstanceManager.get_unique_temp_path()
+
+
 _global_instance_manager: Optional[InstanceManager] = None
 _instance_manager_lock = threading.Lock()
 
@@ -206,6 +315,9 @@ def reset_global_instance_manager():
     Reset the global InstanceManager (for testing purposes).
 
     This closes all instances and creates a new manager.
+
+    Note: This will close all active instances regardless of mode.
+    Use with caution in tests.
     """
     global _global_instance_manager
 

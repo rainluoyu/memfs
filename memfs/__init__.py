@@ -32,6 +32,8 @@ from .api.native import (
     get_instance_count,
     has_instance,
     close_all_instances,
+    InstanceConflictError,
+    get_unique_temp_path,
 )
 from .api.object import MemFileSystem
 from .core.file import VirtualFile
@@ -75,4 +77,6 @@ __all__ = [
     "get_instance_count",
     "has_instance",
     "close_all_instances",
+    "InstanceConflictError",
+    "get_unique_temp_path",
 ]

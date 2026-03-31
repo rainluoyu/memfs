@@ -112,12 +112,12 @@ pytest tests/test_core.py::TestMemFileSystem::test_write_read -v
 | 文件 | 核心类/函数 | 功能说明 |
 |------|-------------|----------|
 | `memfs/__init__.py` | 模块导出 | 导出所有公共 API |
-| `memfs/api/native.py` | `init()`, `write()`, `read()`, `exists()`, `delete()`, `open()`, `mkdir()`, `rmdir()`, `listdir()`, `glob()`, `set_priority()`, `get_priority()`, `preload()`, `gc()`, `get_stats()`, `get_file_info()`, `get_memory_map()`, `close()`, `close_instance()`, `get_instance_stats()`, `get_instance_count()`, `has_instance()`, `close_all_instances()` | 原生风格 API，支持多实例管理 |
+| `memfs/api/native.py` | `init()`, `write()`, `read()`, `exists()`, `delete()`, `open()`, `mkdir()`, `rmdir()`, `listdir()`, `glob()`, `set_priority()`, `get_priority()`, `preload()`, `gc()`, `get_stats()`, `get_file_info()`, `get_memory_map()`, `close()`, `close_instance()`, `get_instance_stats()`, `get_instance_count()`, `has_instance()`, `close_all_instances()`, `InstanceConflictError`, `get_unique_temp_path()` | 原生风格 API，支持多实例管理、temp 模式路径冲突检测 |
 | `memfs/api/object.py` | `MemFileSystem`（重导出） | 面向对象 API 入口 |
 | `memfs/core/filesystem.py` | `MemFileSystem`, `_normalize_path()`, `shutdown_async()`, `get_memory_map()`, `_on_swap_callback()`, `get_stats()` | 主文件系统类，协调所有操作；路径规范化；异步关闭；内存地图查询；swap 事件回调；统计信息 |
 | `memfs/core/file.py` | `VirtualFile` | 虚拟文件对象，支持文件流操作 |
 | `memfs/core/directory.py` | `VirtualDirectory`, `DirectoryManager` | 虚拟目录树管理，使用 RLock 防止死锁 |
-| `memfs/core/instance_manager.py` | `InstanceManager`, `get_global_instance_manager()`, `reset_global_instance_manager()` | 多实例管理器，支持按 persist_path 区分的实例管理、引用计数、生命周期管理 |
+| `memfs/core/instance_manager.py` | `InstanceManager`, `InstanceConflictError`, `get_global_instance_manager()`, `reset_global_instance_manager()`, `get_unique_temp_path()` | 多实例管理器，支持 temp/persist 模式路径冲突检测、引用计数、生命周期管理、唯一临时路径生成 |
 | `memfs/storage/hybrid.py` | `HybridStorage`, `ExternalModificationError`, `_sync_persisted_files_to_directories()` | 混合存储管理器，自动内存/磁盘 tiering；持久化模式下同步磁盘文件到目录树 |
 | `memfs/storage/memory.py` | `MemoryManager`, `MemoryFile` | 内存管理器，带 eviction 策略 |
 | `memfs/storage/real_path.py` | `RealPathStorage`, `_check_path_safety()` | 磁盘路径存储，1:1 映射虚拟路径；临时模式下的路径安全检查 |
@@ -175,11 +175,12 @@ import memfs  # memfs 的 debug 日志将自动输出到全局配置的目标
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
 | `memory_limit` | 0.8 | 内存使用限制 (0-1) |
-| `persist_path` | './memfs_data' | 持久化/临时目录路径 |
+| `persist_path` | None (auto-generate for temp) | 持久化/临时目录路径，temp 模式为 None 时自动生成唯一路径 |
 | `storage_mode` | 'temp' | 存储模式：'temp'（临时，关闭时清理）或 'persist'（持久化） |
 | `worker_threads` | 4 | 后台工作线程数 |
 | `priority_boost_threshold` | 10 | 自动提升优先级的访问次数 |
 | 路径前缀 | '/' | 虚拟路径根目录（统一使用 Linux 风格路径） |
+| **实例冲突规则** | - | Temp 模式：路径必须唯一，不能与任何现有实例重叠<br>Persist 模式：可以共享同一路径（引用计数）<br>Temp 和 persist 模式不能重叠 |
 
 ### 测试覆盖
 
@@ -192,11 +193,20 @@ import memfs  # memfs 的 debug 日志将自动输出到全局配置的目标
 ---
 
 **最后更新**：2026-03-31  
-**版本**：0.2.6
+**版本**：0.2.7
 
 ---
 
 ## 更新日志
+
+### v0.2.7 (2026-03-31)
+- 实现 temp 模式路径冲突检测：temp 模式实例必须使用唯一直路径，禁止重叠
+- 实现 persist 模式路径共享：多个 persist 实例可以共享同一路径（引用计数）
+- 新增 InstanceConflictError 异常：temp/persist 模式冲突时抛出
+- 新增 get_unique_temp_path() 函数：自动生成唯一临时路径
+- 修改 init() 默认行为：未指定 persist_path 时自动生成唯一临时路径
+- 移除 legacy 模式（named_instance 参数）
+- 新增测试：test_multi_instance.py 新增 7 个 temp 模式冲突检测测试用例（共 23 个测试）
 
 ### v0.2.6 (2026-03-31)
 - 添加多实例支持：InstanceManager 管理多个独立 MemFileSystem 实例

@@ -10,6 +10,8 @@ from ..core.filesystem import MemFileSystem
 from ..core.instance_manager import (
     get_global_instance_manager,
     reset_global_instance_manager,
+    InstanceConflictError,
+    get_unique_temp_path,
 )
 
 
@@ -19,91 +21,86 @@ _global_fs_config: dict = {}
 
 def init(
     memory_limit: float = 0.8,
-    persist_path: str = "./memfs_data",
+    persist_path: Optional[str] = None,
     storage_mode: str = "temp",
     worker_threads: int = 4,
     enable_logging: bool = True,
     log_path: Optional[str] = None,
     priority_boost_threshold: int = 10,
-    named_instance: bool = True,
 ) -> MemFileSystem:
     """
     Initialize or get a MemFileSystem instance.
 
-    When named_instance=True (default):
-    - Same persist_path returns the same instance (deduplication)
-    - Different persist_path returns independent instances (isolation)
-    - Reference counting: init() increments count, close() decrements
-    - Instance auto-shutdown when ref count reaches zero
-
-    When named_instance=False:
-    - Legacy behavior: always creates a new global instance
-    - Closes any existing global instance
+    Instance Management Rules:
+    - Temp mode (default): Each instance must use a unique persist_path.
+      - If persist_path is None, automatically generates a unique temporary path.
+      - Cannot overlap with any existing instance (temp or persist) on the same path.
+    - Persist mode: Multiple instances can share the same persist_path (reference counted).
+    - Reference counting: init() increments count, close() decrements.
+    - Instance auto-shutdown when ref count reaches zero.
 
     Args:
         memory_limit: Memory usage limit (0-1).
-        persist_path: Root path for real files (used as instance key when named_instance=True).
+        persist_path: Root path for real files.
+                      If None and storage_mode="temp", auto-generates unique path.
+                      Required for storage_mode="persist".
         storage_mode: Storage mode - "temp" (temporary, cleanup on shutdown) or "persist" (keep files after shutdown).
         worker_threads: Number of background worker threads.
         enable_logging: Whether to enable operation logging.
         log_path: Path for operation log file.
         priority_boost_threshold: Access count to boost priority.
-        named_instance: Use named instance management (default True).
 
     Returns:
         MemFileSystem instance.
 
+    Raises:
+        InstanceConflictError: If trying to create a temp mode instance with a path
+                               that conflicts with an existing instance.
+
     Example:
         >>> import memfs
-        >>> # Multi-instance mode (default)
-        >>> fs1 = memfs.init(persist_path="./data_a")
-        >>> fs2 = memfs.init(persist_path="./data_b")  # Independent instance
-        >>> fs3 = memfs.init(persist_path="./data_a")  # Returns fs1 (same instance)
 
-        >>> # Legacy mode
-        >>> fs_old = memfs.init(persist_path="./data", named_instance=False)
+        >>> # Temp mode with auto-generated unique path (default)
+        >>> fs1 = memfs.init()  # Auto-generates unique temp path
+        >>> fs2 = memfs.init()  # Different unique path
+
+        >>> # Temp mode with explicit path (must be unique)
+        >>> fs3 = memfs.init(persist_path="./data_a", storage_mode="temp")
+        >>> fs4 = memfs.init(persist_path="./data_b", storage_mode="temp")
+
+        >>> # Persist mode can share path
+        >>> fs5 = memfs.init(persist_path="./shared", storage_mode="persist")
+        >>> fs6 = memfs.init(persist_path="./shared", storage_mode="persist")  # Same instance
+
+        >>> # Temp mode conflict - raises InstanceConflictError
+        >>> fs7 = memfs.init(persist_path="./shared", storage_mode="temp")
+        Traceback (most recent call last):
+            ...
+        InstanceConflictError: ...
     """
     global _global_fs, _global_fs_config
 
-    if named_instance:
-        instance_manager = get_global_instance_manager()
-        fs = instance_manager.get_or_create_instance(
-            persist_path=persist_path,
-            memory_limit=memory_limit,
-            storage_mode=storage_mode,
-            worker_threads=worker_threads,
-            enable_logging=enable_logging,
-            log_path=log_path,
-            priority_boost_threshold=priority_boost_threshold,
-        )
-        _global_fs = fs
-        _global_fs_config = {
-            "memory_limit": memory_limit,
-            "persist_path": persist_path,
-            "storage_mode": storage_mode,
-            "worker_threads": worker_threads,
-            "enable_logging": enable_logging,
-            "log_path": log_path,
-            "priority_boost_threshold": priority_boost_threshold,
-        }
-        return fs
-    else:
-        # Legacy behavior: always create new global instance
-        if _global_fs is not None:
-            _global_fs.shutdown(wait=True)
-
-        _global_fs_config = {
-            "memory_limit": memory_limit,
-            "persist_path": persist_path,
-            "storage_mode": storage_mode,
-            "worker_threads": worker_threads,
-            "enable_logging": enable_logging,
-            "log_path": log_path,
-            "priority_boost_threshold": priority_boost_threshold,
-        }
-
-        _global_fs = MemFileSystem(**_global_fs_config)
-        return _global_fs
+    instance_manager = get_global_instance_manager()
+    fs = instance_manager.get_or_create_instance(
+        persist_path=persist_path,
+        memory_limit=memory_limit,
+        storage_mode=storage_mode,
+        worker_threads=worker_threads,
+        enable_logging=enable_logging,
+        log_path=log_path,
+        priority_boost_threshold=priority_boost_threshold,
+    )
+    _global_fs = fs
+    _global_fs_config = {
+        "memory_limit": memory_limit,
+        "persist_path": persist_path,
+        "storage_mode": storage_mode,
+        "worker_threads": worker_threads,
+        "enable_logging": enable_logging,
+        "log_path": log_path,
+        "priority_boost_threshold": priority_boost_threshold,
+    }
+    return fs
 
 
 def _get_fs() -> MemFileSystem:
@@ -395,22 +392,16 @@ def clear_persist() -> bool:
     return False
 
 
-def close(fs: Optional[MemFileSystem] = None, named_instance: bool = True) -> bool:
+def close(fs: Optional[MemFileSystem] = None) -> bool:
     """
     Close a MemFileSystem instance.
 
-    When named_instance=True (default):
-    - Decrements reference count for the instance
-    - Instance is shut down and removed when ref count reaches zero
-    - If fs is None, closes the global instance
-
-    When named_instance=False:
-    - Legacy behavior: closes the global instance
-    - If fs is provided, shuts down that specific instance
+    Decrements reference count for the instance.
+    Instance is shut down and removed when ref count reaches zero.
+    If fs is None, closes the global instance.
 
     Args:
         fs: Optional MemFileSystem instance to close. If None, closes global instance.
-        named_instance: Use named instance management (default True).
 
     Returns:
         True if instance was shut down and removed, False if still in use.
@@ -423,27 +414,17 @@ def close(fs: Optional[MemFileSystem] = None, named_instance: bool = True) -> bo
     """
     global _global_fs
 
-    if named_instance:
-        instance_manager = get_global_instance_manager()
+    instance_manager = get_global_instance_manager()
 
-        if fs is None:
-            fs = _global_fs
+    if fs is None:
+        fs = _global_fs
 
-        if fs is not None:
-            result = instance_manager.release_instance(fs)
-            if result:
-                _global_fs = None
-            return result
-        return False
-    else:
-        if fs is None:
-            fs = _global_fs
-
-        if fs is not None:
-            fs.shutdown(wait=True)
+    if fs is not None:
+        result = instance_manager.release_instance(fs)
+        if result:
             _global_fs = None
-            return True
-        return False
+        return result
+    return False
 
 
 def close_instance(persist_path: str) -> bool:
