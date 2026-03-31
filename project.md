@@ -134,7 +134,7 @@ pytest tests/test_core.py::TestMemFileSystem::test_write_read -v
 | `memfs.core.filesystem.logger` | memfs 专用 logger，使用 `logging.getLogger("memfs")` |
 | `memfs.storage.hybrid.logger` | hybrid storage 专用 logger |
 | `get_file_info()` | 返回文件信息，新增 `in_memory` 字段表示文件是否在内存中，调用时打印 debug 日志 |
-| `get_memory_map()` | 返回所有缓存文件的内存地图，包含位置、大小、优先级等信息，调用时打印 debug 日志 |
+| `get_memory_map()` | 返回**仅在内存中**的文件地图，包含大小、优先级等信息，调用时打印 debug 日志 |
 | `_on_swap_callback()` | swap 事件回调，在文件换入换出时自动打印 debug 日志和内存地图 |
 
 **Debug 日志覆盖的函数**：
@@ -145,7 +145,7 @@ pytest tests/test_core.py::TestMemFileSystem::test_write_read -v
 | `write()` | 文件路径、大小、优先级、是否成功、耗时 |
 | `delete()` | 文件路径、是否成功 |
 | `get_file_info()` | 文件路径、位置、in_memory 状态、优先级 |
-| `get_memory_map()` | 缓存文件总数 |
+| `get_memory_map()` | 内存中的文件总数（只统计 in_memory=True 的文件） |
 | `set_priority()` | 文件路径、优先级、是否成功 |
 | `preload()` | 文件路径、优先级 |
 | `gc()` | 目标使用率、实际换出文件数 |
@@ -190,11 +190,16 @@ import memfs  # memfs 的 debug 日志将自动输出到全局配置的目标
 ---
 
 **最后更新**：2026-03-31  
-**版本**：0.2.3
+**版本**：0.2.4
 
 ---
 
 ## 更新日志
+
+### v0.2.4 (2026-03-31)
+- 修改 `get_memory_map()` 函数，只返回当前在内存中的文件（in_memory=True）
+- 优化内存地图打印信息，移除冗余的 location 字段
+- 更新 debug 日志说明，明确标注只统计内存中的文件
 
 ### v0.2.3 (2026-03-31)
 - 为所有核心函数添加 debug 日志（read, write, delete, get_file_info, get_memory_map, set_priority, preload, gc）

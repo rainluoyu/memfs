@@ -497,44 +497,44 @@ class MemFileSystem:
 
     def get_memory_map(self) -> Dict[str, dict]:
         """
-        Get memory map showing all cached files and their locations.
+        Get memory map showing only files currently in memory.
 
         Returns:
-            Dictionary mapping file paths to their info (location, size, priority).
+            Dictionary mapping file paths to their info (size, priority).
+            Only includes files that are currently cached in memory.
 
         Example:
             >>> fs = MemFileSystem()
             >>> memory_map = fs.get_memory_map()
             >>> print(memory_map)
             {
-                "/data/file1.txt": {"location": "memory", "size": 1024, "priority": 5},
-                "/data/file2.txt": {"location": "real", "size": 2048, "priority": 3},
+                "/data/file1.txt": {"size": 1024, "priority": 5, "in_memory": True},
+                "/data/file2.txt": {"size": 2048, "priority": 3, "in_memory": True},
             }
         """
         memory_map = {}
 
         for key in self.storage._file_locations:
             location = self.storage._file_locations[key]
+            
+            # Only include files that are in memory
+            if location != "memory":
+                continue
+            
             priority = self._file_priorities.get(key, 5)
 
             file_info = {
-                "location": location,
-                "in_memory": location == "memory",
+                "in_memory": True,
                 "priority": priority,
             }
 
-            if location == "memory":
-                mem_info = self.storage.memory.get_file_info(key)
-                if mem_info:
-                    file_info["size"] = mem_info.get("size", 0)
-            elif location == "real":
-                real_info = self.storage.real_storage.get_file_info(key)
-                if real_info:
-                    file_info["size"] = real_info.get("size", 0)
+            mem_info = self.storage.memory.get_file_info(key)
+            if mem_info:
+                file_info["size"] = mem_info.get("size", 0)
 
             memory_map[key] = file_info
 
-        logger.debug("Memory map generated: %d files", len(memory_map))
+        logger.debug("Memory map generated: %d files in memory", len(memory_map))
 
         return memory_map
 
