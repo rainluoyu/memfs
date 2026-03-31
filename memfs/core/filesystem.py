@@ -515,10 +515,10 @@ class MemFileSystem:
         memory_map = {}
 
         for key in self.storage._file_locations:
-            location = self.storage._file_locations[key]
-            
-            # Only include files that are in memory
-            if location != "memory":
+            # Use memory.contains() to check if file is actually in memory
+            # This is more accurate than checking _file_locations because
+            # _file_locations may not be updated immediately after swap-out
+            if not self.storage.memory.contains(key):
                 continue
             
             priority = self._file_priorities.get(key, 5)
