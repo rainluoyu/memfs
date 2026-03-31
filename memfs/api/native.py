@@ -303,6 +303,25 @@ def get_file_info(path: str) -> Optional[dict]:
     return _get_fs().get_file_info(path)
 
 
+def get_memory_map() -> dict:
+    """
+    Get memory map showing all cached files and their locations.
+
+    Returns:
+        Dictionary mapping file paths to their info (location, size, priority).
+
+    Example:
+        >>> import memfs
+        >>> memfs.write('/data.txt', b'hello')
+        >>> memory_map = memfs.get_memory_map()
+        >>> print(memory_map)
+        {
+            "/data.txt": {"location": "memory", "size": 5, "priority": 5, "in_memory": True},
+        }
+    """
+    return _get_fs().get_memory_map()
+
+
 def clear_persist() -> bool:
     """
     Clear persistent storage directory.

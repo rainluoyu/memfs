@@ -7,6 +7,7 @@ import os
 import threading
 import time
 import shutil
+import logging
 from typing import Any, BinaryIO, Dict, List, Optional, Union
 from pathlib import Path
 
@@ -15,6 +16,8 @@ from ..core.directory import DirectoryManager
 from ..storage.hybrid import HybridStorage, ExternalModificationError
 from ..utils.logger import OperationLogger, OperationType
 from ..utils.stats import Statistics
+
+logger = logging.getLogger("memfs")
 
 
 class MemFileSystem:
@@ -63,6 +66,7 @@ class MemFileSystem:
             storage_mode=storage_mode,
             worker_threads=worker_threads,
             directory_manager=self.directories,
+            on_swap=self._on_swap_callback,
         )
 
         self.priority_boost_threshold = priority_boost_threshold
@@ -411,6 +415,7 @@ class MemFileSystem:
         info = {
             "path": path,
             "location": location,
+            "in_memory": location == "memory",
             "priority": self.get_priority(normalized_path),
         }
 
@@ -422,6 +427,9 @@ class MemFileSystem:
             real_info = self.storage.real_storage.get_file_info(normalized_path)
             if real_info:
                 info.update(real_info)
+
+        # Ensure in_memory field is always correct
+        info["in_memory"] = location == "memory"
 
         return info
 
@@ -442,6 +450,69 @@ class MemFileSystem:
         """Log an operation."""
         if self.logger:
             self.logger.log(operation, path, **kwargs)
+
+    def get_memory_map(self) -> Dict[str, dict]:
+        """
+        Get memory map showing all cached files and their locations.
+
+        Returns:
+            Dictionary mapping file paths to their info (location, size, priority).
+
+        Example:
+            >>> fs = MemFileSystem()
+            >>> memory_map = fs.get_memory_map()
+            >>> print(memory_map)
+            {
+                "/data/file1.txt": {"location": "memory", "size": 1024, "priority": 5},
+                "/data/file2.txt": {"location": "real", "size": 2048, "priority": 3},
+            }
+        """
+        memory_map = {}
+
+        for key in self.storage._file_locations:
+            location = self.storage._file_locations[key]
+            priority = self._file_priorities.get(key, 5)
+
+            file_info = {
+                "location": location,
+                "in_memory": location == "memory",
+                "priority": priority,
+            }
+
+            if location == "memory":
+                mem_info = self.storage.memory.get_file_info(key)
+                if mem_info:
+                    file_info["size"] = mem_info.get("size", 0)
+            elif location == "real":
+                real_info = self.storage.real_storage.get_file_info(key)
+                if real_info:
+                    file_info["size"] = real_info.get("size", 0)
+
+            memory_map[key] = file_info
+
+        logger.debug("Memory map generated: %d files", len(memory_map))
+
+        return memory_map
+
+    def _on_swap_callback(self, key: str, direction: str):
+        """
+        Callback for swap events. Logs debug information and prints memory map.
+
+        Args:
+            key: File key that was swapped.
+            direction: Swap direction ("swap_in", "swap_out", "write_real", "delete_real").
+        """
+        if logger.isEnabledFor(logging.DEBUG):
+            location = self.storage._file_locations.get(key, "unknown")
+            priority = self._file_priorities.get(key, 5)
+            logger.debug(
+                "Swap event: key=%s, direction=%s, location=%s, priority=%d",
+                key, direction, location, priority
+            )
+
+            if direction in ("swap_in", "swap_out"):
+                memory_map = self.get_memory_map()
+                logger.debug("Memory map after %s: %s", direction, memory_map)
 
     def clear(self):
         """Clear all files."""

@@ -112,9 +112,9 @@ pytest tests/test_core.py::TestMemFileSystem::test_write_read -v
 | 文件 | 核心类/函数 | 功能说明 |
 |------|-------------|----------|
 | `memfs/__init__.py` | 模块导出 | 导出所有公共 API |
-| `memfs/api/native.py` | `init()`, `write()`, `read()`, `exists()`, `delete()`, `open()`, `mkdir()`, `rmdir()`, `listdir()`, `glob()`, `set_priority()`, `get_priority()`, `preload()`, `gc()`, `get_stats()`, `get_file_info()` | 原生风格 API |
+| `memfs/api/native.py` | `init()`, `write()`, `read()`, `exists()`, `delete()`, `open()`, `mkdir()`, `rmdir()`, `listdir()`, `glob()`, `set_priority()`, `get_priority()`, `preload()`, `gc()`, `get_stats()`, `get_file_info()`, `get_memory_map()` | 原生风格 API |
 | `memfs/api/object.py` | `MemFileSystem`（重导出） | 面向对象 API 入口 |
-| `memfs/core/filesystem.py` | `MemFileSystem`, `_normalize_path()`, `shutdown_async()` | 主文件系统类，协调所有操作；路径规范化；异步关闭 |
+| `memfs/core/filesystem.py` | `MemFileSystem`, `_normalize_path()`, `shutdown_async()`, `get_memory_map()`, `_on_swap_callback()` | 主文件系统类，协调所有操作；路径规范化；异步关闭；内存地图查询；swap 事件回调 |
 | `memfs/core/file.py` | `VirtualFile` | 虚拟文件对象，支持文件流操作 |
 | `memfs/core/directory.py` | `VirtualDirectory`, `DirectoryManager` | 虚拟目录树管理，使用 RLock 防止死锁 |
 | `memfs/storage/hybrid.py` | `HybridStorage`, `ExternalModificationError`, `_sync_persisted_files_to_directories()` | 混合存储管理器，自动内存/磁盘 tiering；持久化模式下同步磁盘文件到目录树 |
@@ -126,7 +126,22 @@ pytest tests/test_core.py::TestMemFileSystem::test_write_read -v
 | `memfs/cache/tracker.py` | `AccessTracker`, `FileAccessRecord` | 访问频率追踪 |
 | `memfs/async_worker/worker.py` | `AsyncWorker`, `Task`, `TaskResult`, `TaskType`, `_atexit_cleanup()` | 异步任务执行器；Python 退出时清理和警告 |
 | `memfs/utils/stats.py` | `Statistics`, `MemoryStats`, `DiskStats`, `CacheStats`, `OperationStats` | 统计信息收集器 |
-| `memfs/utils/logger.py` | `OperationLogger`, `OperationType`, `LogEntry` | 操作日志记录器 |
+| `memfs/utils/logger.py` | `OperationLogger`, `OperationType`, `LogEntry` | 操作日志记录器（文件日志） |
+### Debug 功能
+
+| 函数/模块 | 功能说明 |
+|-----------|----------|
+| `memfs.core.filesystem.logger` | memfs 专用 logger，使用 `logging.getLogger("memfs")` |
+| `get_file_info()` | 返回文件信息，新增 `in_memory` 字段表示文件是否在内存中 |
+| `get_memory_map()` | 返回所有缓存文件的内存地图，包含位置、大小、优先级等信息 |
+| `_on_swap_callback()` | swap 事件回调，在文件换入换出时自动打印 debug 日志和内存地图 |
+
+**Debug 日志启用方式**：
+```python
+import logging
+logging.basicConfig(level=logging.DEBUG)  # 设置全局 logging 级别为 DEBUG
+import memfs  # memfs 的 debug 日志将自动输出到全局配置的目标
+```
 
 ### 核心数据结构
 
@@ -154,12 +169,19 @@ pytest tests/test_core.py::TestMemFileSystem::test_write_read -v
 
 ---
 
-**最后更新**：2026-03-28  
-**版本**：0.2.1
+**最后更新**：2026-03-31  
+**版本**：0.2.2
 
 ---
 
 ## 更新日志
+
+### v0.2.2 (2026-03-31)
+- 添加 `get_memory_map()` 函数，返回所有缓存文件的内存地图
+- `get_file_info()` 新增 `in_memory` 字段，表示文件是否在内存中
+- 添加 memfs 专用 logger（`logging.getLogger("memfs")`），支持全局 logging 级别控制
+- 文件换入换出时自动打印 debug 日志和内存地图
+- 更新 project.md 代码地图
 
 ### v0.2.1 (2026-03-28)
 - 删除压缩相关功能（compression、compression_level 参数已移除）
