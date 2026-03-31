@@ -112,11 +112,12 @@ pytest tests/test_core.py::TestMemFileSystem::test_write_read -v
 | 文件 | 核心类/函数 | 功能说明 |
 |------|-------------|----------|
 | `memfs/__init__.py` | 模块导出 | 导出所有公共 API |
-| `memfs/api/native.py` | `init()`, `write()`, `read()`, `exists()`, `delete()`, `open()`, `mkdir()`, `rmdir()`, `listdir()`, `glob()`, `set_priority()`, `get_priority()`, `preload()`, `gc()`, `get_stats()`, `get_file_info()`, `get_memory_map()` | 原生风格 API |
+| `memfs/api/native.py` | `init()`, `write()`, `read()`, `exists()`, `delete()`, `open()`, `mkdir()`, `rmdir()`, `listdir()`, `glob()`, `set_priority()`, `get_priority()`, `preload()`, `gc()`, `get_stats()`, `get_file_info()`, `get_memory_map()`, `close()`, `close_instance()`, `get_instance_stats()`, `get_instance_count()`, `has_instance()`, `close_all_instances()` | 原生风格 API，支持多实例管理 |
 | `memfs/api/object.py` | `MemFileSystem`（重导出） | 面向对象 API 入口 |
-| `memfs/core/filesystem.py` | `MemFileSystem`, `_normalize_path()`, `shutdown_async()`, `get_memory_map()`, `_on_swap_callback()` | 主文件系统类，协调所有操作；路径规范化；异步关闭；内存地图查询；swap 事件回调 |
+| `memfs/core/filesystem.py` | `MemFileSystem`, `_normalize_path()`, `shutdown_async()`, `get_memory_map()`, `_on_swap_callback()`, `get_stats()` | 主文件系统类，协调所有操作；路径规范化；异步关闭；内存地图查询；swap 事件回调；统计信息 |
 | `memfs/core/file.py` | `VirtualFile` | 虚拟文件对象，支持文件流操作 |
 | `memfs/core/directory.py` | `VirtualDirectory`, `DirectoryManager` | 虚拟目录树管理，使用 RLock 防止死锁 |
+| `memfs/core/instance_manager.py` | `InstanceManager`, `get_global_instance_manager()`, `reset_global_instance_manager()` | 多实例管理器，支持按 persist_path 区分的实例管理、引用计数、生命周期管理 |
 | `memfs/storage/hybrid.py` | `HybridStorage`, `ExternalModificationError`, `_sync_persisted_files_to_directories()` | 混合存储管理器，自动内存/磁盘 tiering；持久化模式下同步磁盘文件到目录树 |
 | `memfs/storage/memory.py` | `MemoryManager`, `MemoryFile` | 内存管理器，带 eviction 策略 |
 | `memfs/storage/real_path.py` | `RealPathStorage`, `_check_path_safety()` | 磁盘路径存储，1:1 映射虚拟路径；临时模式下的路径安全检查 |
@@ -184,17 +185,27 @@ import memfs  # memfs 的 debug 日志将自动输出到全局配置的目标
 
 - **核心测试**：`tests/test_core.py` - 131 个测试用例，覆盖所有核心模块
 - **RealPath 测试**：`tests/test_real_path.py` - 21 个测试用例，包含持久化存储、文件锁、异步操作、持久化模式 listdir、临时模式路径安全检查测试
+- **多实例测试**：`tests/test_multi_instance.py` - 18 个测试用例，覆盖实例管理器、实例隔离、生命周期管理、引用计数、多数据集场景
 - **测试框架**：pytest
 - **覆盖率**：核心模块 >80%
 
 ---
 
 **最后更新**：2026-03-31  
-**版本**：0.2.5
+**版本**：0.2.6
 
 ---
 
 ## 更新日志
+
+### v0.2.6 (2026-03-31)
+- 添加多实例支持：InstanceManager 管理多个独立 MemFileSystem 实例
+- 实现引用计数：init() 计数 +1，close() 计数 -1，归零时自动 shutdown
+- 添加实例生命周期管理函数：close(), close_instance(), get_instance_stats(), get_instance_count(), has_instance(), close_all_instances()
+- 新增 memfs/core/instance_manager.py 模块
+- 新增 tests/test_multi_instance.py 单元测试（18 个测试用例）
+- 支持 train/val 多数据集并发加载场景
+- MemFileSystem 添加 get_stats() 方法
 
 ### v0.2.5 (2026-03-31)
 - 修复 `get_memory_map()` 使用 `memory.contains()` 判断文件是否真正在内存中

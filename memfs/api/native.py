@@ -7,6 +7,10 @@ import os as _os
 from typing import List, Optional, Union
 
 from ..core.filesystem import MemFileSystem
+from ..core.instance_manager import (
+    get_global_instance_manager,
+    reset_global_instance_manager,
+)
 
 
 _global_fs: Optional[MemFileSystem] = None
@@ -21,43 +25,85 @@ def init(
     enable_logging: bool = True,
     log_path: Optional[str] = None,
     priority_boost_threshold: int = 10,
+    named_instance: bool = True,
 ) -> MemFileSystem:
     """
-    Initialize global MemFileSystem instance with custom configuration.
+    Initialize or get a MemFileSystem instance.
+
+    When named_instance=True (default):
+    - Same persist_path returns the same instance (deduplication)
+    - Different persist_path returns independent instances (isolation)
+    - Reference counting: init() increments count, close() decrements
+    - Instance auto-shutdown when ref count reaches zero
+
+    When named_instance=False:
+    - Legacy behavior: always creates a new global instance
+    - Closes any existing global instance
 
     Args:
         memory_limit: Memory usage limit (0-1).
-        persist_path: Root path for real files.
+        persist_path: Root path for real files (used as instance key when named_instance=True).
         storage_mode: Storage mode - "temp" (temporary, cleanup on shutdown) or "persist" (keep files after shutdown).
         worker_threads: Number of background worker threads.
         enable_logging: Whether to enable operation logging.
         log_path: Path for operation log file.
         priority_boost_threshold: Access count to boost priority.
+        named_instance: Use named instance management (default True).
 
     Returns:
         MemFileSystem instance.
 
     Example:
         >>> import memfs
-        >>> fs = memfs.init(storage_mode="persist", persist_path="./my_data")
+        >>> # Multi-instance mode (default)
+        >>> fs1 = memfs.init(persist_path="./data_a")
+        >>> fs2 = memfs.init(persist_path="./data_b")  # Independent instance
+        >>> fs3 = memfs.init(persist_path="./data_a")  # Returns fs1 (same instance)
+
+        >>> # Legacy mode
+        >>> fs_old = memfs.init(persist_path="./data", named_instance=False)
     """
     global _global_fs, _global_fs_config
 
-    if _global_fs is not None:
-        _global_fs.shutdown(wait=True)
+    if named_instance:
+        instance_manager = get_global_instance_manager()
+        fs = instance_manager.get_or_create_instance(
+            persist_path=persist_path,
+            memory_limit=memory_limit,
+            storage_mode=storage_mode,
+            worker_threads=worker_threads,
+            enable_logging=enable_logging,
+            log_path=log_path,
+            priority_boost_threshold=priority_boost_threshold,
+        )
+        _global_fs = fs
+        _global_fs_config = {
+            "memory_limit": memory_limit,
+            "persist_path": persist_path,
+            "storage_mode": storage_mode,
+            "worker_threads": worker_threads,
+            "enable_logging": enable_logging,
+            "log_path": log_path,
+            "priority_boost_threshold": priority_boost_threshold,
+        }
+        return fs
+    else:
+        # Legacy behavior: always create new global instance
+        if _global_fs is not None:
+            _global_fs.shutdown(wait=True)
 
-    _global_fs_config = {
-        "memory_limit": memory_limit,
-        "persist_path": persist_path,
-        "storage_mode": storage_mode,
-        "worker_threads": worker_threads,
-        "enable_logging": enable_logging,
-        "log_path": log_path,
-        "priority_boost_threshold": priority_boost_threshold,
-    }
+        _global_fs_config = {
+            "memory_limit": memory_limit,
+            "persist_path": persist_path,
+            "storage_mode": storage_mode,
+            "worker_threads": worker_threads,
+            "enable_logging": enable_logging,
+            "log_path": log_path,
+            "priority_boost_threshold": priority_boost_threshold,
+        }
 
-    _global_fs = MemFileSystem(**_global_fs_config)
-    return _global_fs
+        _global_fs = MemFileSystem(**_global_fs_config)
+        return _global_fs
 
 
 def _get_fs() -> MemFileSystem:
@@ -347,3 +393,170 @@ def clear_persist() -> bool:
         shutil.rmtree(persist_dir)
         return True
     return False
+
+
+def close(fs: Optional[MemFileSystem] = None, named_instance: bool = True) -> bool:
+    """
+    Close a MemFileSystem instance.
+
+    When named_instance=True (default):
+    - Decrements reference count for the instance
+    - Instance is shut down and removed when ref count reaches zero
+    - If fs is None, closes the global instance
+
+    When named_instance=False:
+    - Legacy behavior: closes the global instance
+    - If fs is provided, shuts down that specific instance
+
+    Args:
+        fs: Optional MemFileSystem instance to close. If None, closes global instance.
+        named_instance: Use named instance management (default True).
+
+    Returns:
+        True if instance was shut down and removed, False if still in use.
+
+    Example:
+        >>> import memfs
+        >>> fs = memfs.init(persist_path="./data")
+        >>> memfs.close(fs)  # Decrement ref count
+        >>> memfs.close()  # Close global instance
+    """
+    global _global_fs
+
+    if named_instance:
+        instance_manager = get_global_instance_manager()
+
+        if fs is None:
+            fs = _global_fs
+
+        if fs is not None:
+            result = instance_manager.release_instance(fs)
+            if result:
+                _global_fs = None
+            return result
+        return False
+    else:
+        if fs is None:
+            fs = _global_fs
+
+        if fs is not None:
+            fs.shutdown(wait=True)
+            _global_fs = None
+            return True
+        return False
+
+
+def close_instance(persist_path: str) -> bool:
+    """
+    Close an instance by persist_path.
+
+    Decrements reference count for the instance associated with the given path.
+    Instance is shut down when ref count reaches zero.
+
+    Args:
+        persist_path: The persist_path of the instance to close.
+
+    Returns:
+        True if instance was shut down and removed, False if still in use or not found.
+
+    Example:
+        >>> import memfs
+        >>> fs = memfs.init(persist_path="./data")
+        >>> memfs.close_instance("./data")  # Close instance by path
+    """
+    instance_manager = get_global_instance_manager()
+
+    fs = None
+    for key, instance in instance_manager._instances.items():
+        if instance._persist_path == str(
+            __import__("pathlib").Path(persist_path).expanduser().resolve()
+        ):
+            fs = instance
+            break
+
+    if fs is not None:
+        global _global_fs
+        result = instance_manager.release_instance(fs)
+        if result and _global_fs is fs:
+            _global_fs = None
+        return result
+    return False
+
+
+def get_instance_stats() -> dict:
+    """
+    Get statistics for all managed instances.
+
+    Returns:
+        Dictionary with instance keys and their stats (ref_count, storage_mode, persist_path).
+
+    Example:
+        >>> import memfs
+        >>> fs1 = memfs.init(persist_path="./data_a")
+        >>> fs2 = memfs.init(persist_path="./data_b")
+        >>> stats = memfs.get_instance_stats()
+        >>> print(stats)
+        {
+            "/absolute/path/to/data_a": {"ref_count": 1, "storage_mode": "temp", "persist_path": "..."},
+            "/absolute/path/to/data_b": {"ref_count": 1, "storage_mode": "temp", "persist_path": "..."},
+        }
+    """
+    instance_manager = get_global_instance_manager()
+    return instance_manager.get_instance_stats()
+
+
+def get_instance_count() -> int:
+    """
+    Get the number of active instances.
+
+    Returns:
+        Number of instances being managed.
+
+    Example:
+        >>> import memfs
+        >>> fs1 = memfs.init(persist_path="./data_a")
+        >>> fs2 = memfs.init(persist_path="./data_b")
+        >>> count = memfs.get_instance_count()
+        >>> print(count)  # Output: 2
+    """
+    instance_manager = get_global_instance_manager()
+    return instance_manager.get_instance_count()
+
+
+def has_instance(persist_path: str) -> bool:
+    """
+    Check if an instance exists for the given persist_path.
+
+    Args:
+        persist_path: The persist_path to check.
+
+    Returns:
+        True if instance exists.
+
+    Example:
+        >>> import memfs
+        >>> fs = memfs.init(persist_path="./data")
+        >>> memfs.has_instance("./data")  # True
+        >>> memfs.has_instance("./other")  # False
+    """
+    instance_manager = get_global_instance_manager()
+    return instance_manager.has_instance(persist_path)
+
+
+def close_all_instances() -> None:
+    """
+    Close all managed instances.
+
+    This shuts down all instances regardless of reference count.
+    Use with caution - this will close all active instances.
+
+    Example:
+        >>> import memfs
+        >>> fs1 = memfs.init(persist_path="./data_a")
+        >>> fs2 = memfs.init(persist_path="./data_b")
+        >>> memfs.close_all_instances()  # Close everything
+    """
+    instance_manager = get_global_instance_manager()
+    instance_manager.close_all(wait=True)
+    global _global_fs
+    _global_fs = None

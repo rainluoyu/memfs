@@ -26,6 +26,12 @@ from .api.native import (
     clear_persist,
     set_global_fs,
     get_global_fs,
+    close,
+    close_instance,
+    get_instance_stats,
+    get_instance_count,
+    has_instance,
+    close_all_instances,
 )
 from .api.object import MemFileSystem
 from .core.file import VirtualFile
@@ -63,4 +69,10 @@ __all__ = [
     "clear_persist",
     "set_global_fs",
     "get_global_fs",
+    "close",
+    "close_instance",
+    "get_instance_stats",
+    "get_instance_count",
+    "has_instance",
+    "close_all_instances",
 ]
