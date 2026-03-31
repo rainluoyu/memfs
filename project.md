@@ -132,9 +132,29 @@ pytest tests/test_core.py::TestMemFileSystem::test_write_read -v
 | 函数/模块 | 功能说明 |
 |-----------|----------|
 | `memfs.core.filesystem.logger` | memfs 专用 logger，使用 `logging.getLogger("memfs")` |
-| `get_file_info()` | 返回文件信息，新增 `in_memory` 字段表示文件是否在内存中 |
-| `get_memory_map()` | 返回所有缓存文件的内存地图，包含位置、大小、优先级等信息 |
+| `memfs.storage.hybrid.logger` | hybrid storage 专用 logger |
+| `get_file_info()` | 返回文件信息，新增 `in_memory` 字段表示文件是否在内存中，调用时打印 debug 日志 |
+| `get_memory_map()` | 返回所有缓存文件的内存地图，包含位置、大小、优先级等信息，调用时打印 debug 日志 |
 | `_on_swap_callback()` | swap 事件回调，在文件换入换出时自动打印 debug 日志和内存地图 |
+
+**Debug 日志覆盖的函数**：
+
+| 函数 | Debug 日志内容 |
+|------|----------------|
+| `read()` | 文件路径、大小、耗时 |
+| `write()` | 文件路径、大小、优先级、是否成功、耗时 |
+| `delete()` | 文件路径、是否成功 |
+| `get_file_info()` | 文件路径、位置、in_memory 状态、优先级 |
+| `get_memory_map()` | 缓存文件总数 |
+| `set_priority()` | 文件路径、优先级、是否成功 |
+| `preload()` | 文件路径、优先级 |
+| `gc()` | 目标使用率、实际换出文件数 |
+| `HybridStorage.put()` | 文件 key、优先级、位置 |
+| `HybridStorage.get()` | 文件 key、位置、大小、耗时 |
+| `HybridStorage.remove()` | 文件 key、是否成功 |
+| `HybridStorage.gc()` | 当前使用率、目标使用率、换出文件数 |
+| `HybridStorage._swap_in()` | 文件 key、大小 |
+| `_swap_callback()` | swap 事件类型、文件 key、位置、优先级、内存地图 |
 
 **Debug 日志启用方式**：
 ```python
@@ -170,11 +190,17 @@ import memfs  # memfs 的 debug 日志将自动输出到全局配置的目标
 ---
 
 **最后更新**：2026-03-31  
-**版本**：0.2.2
+**版本**：0.2.3
 
 ---
 
 ## 更新日志
+
+### v0.2.3 (2026-03-31)
+- 为所有核心函数添加 debug 日志（read, write, delete, get_file_info, get_memory_map, set_priority, preload, gc）
+- 为 hybrid storage 的所有操作添加 debug 日志（put, get, remove, gc, swap_in）
+- Debug 日志跟随全局 logging 级别控制，输出到全局配置的目标
+- 优化 swap 事件回调，在文件换入换出时自动打印详细内存地图
 
 ### v0.2.2 (2026-03-31)
 - 添加 `get_memory_map()` 函数，返回所有缓存文件的内存地图

@@ -4,6 +4,7 @@ Combines memory and real path storage with automatic tiering.
 """
 
 import threading
+import logging
 import time
 from typing import Any, Callable, Dict, Optional, Tuple
 from pathlib import Path
@@ -15,6 +16,9 @@ from ..cache.tracker import AccessTracker
 from ..cache.priority import PriorityQueue
 from ..utils.stats import Statistics
 from ..async_worker.worker import AsyncWorker, TaskType
+
+
+logger = logging.getLogger("memfs")
 
 
 class HybridStorage:
@@ -140,12 +144,14 @@ class HybridStorage:
 
                 self.stats.record_cache_hit()
 
+                logger.debug("Put file: key=%s, priority=%d, location=memory", key, priority)
                 return True
 
             finally:
                 self.lock_manager.release_write(key)
 
         except Exception:
+            logger.exception("Put file failed: key=%s", key)
             return False
 
     def _schedule_real_write(self, key: str, data: bytes, priority: int):
@@ -235,6 +241,9 @@ class HybridStorage:
         duration_ms = (time.time() - start_time) * 1000
         self.stats.operations.record_read(duration_ms)
 
+        location = self._file_locations.get(key, "unknown")
+        logger.debug("Get file: key=%s, location=%s, size=%d, duration_ms=%.2f", key, location, len(data) if data else 0, duration_ms)
+
         return data
 
     def contains(self, key: str) -> bool:
@@ -275,6 +284,7 @@ class HybridStorage:
                     file_count=len(self._file_locations),
                 )
 
+                logger.debug("Remove file: key=%s, success=%s", key, removed_from_memory)
                 return removed_from_memory
 
             finally:
@@ -398,6 +408,7 @@ class HybridStorage:
                 if self._on_swap:
                     self._on_swap(key, "swap_in")
 
+                logger.debug("Swap in: key=%s, size=%d", key, len(data) if data else 0)
                 return data
 
             finally:
@@ -482,7 +493,10 @@ class HybridStorage:
         current = self.memory.get_usage()
         current_ratio = current["usage_percent"] / 100
 
+        logger.debug("GC started: current_usage=%.2f%%, target_usage=%.2f%%", current["usage_percent"], target_usage * 100)
+
         if current_ratio <= target_usage:
+            logger.debug("GC skipped: current usage already below target")
             return 0
 
         candidates = self.priority_queue.get_eviction_candidates(count=100)
@@ -507,6 +521,7 @@ class HybridStorage:
             if new_usage["usage_percent"] / 100 <= target_usage:
                 break
 
+        logger.debug("GC completed: swapped=%d files, new_usage=%.2f%%", swapped, new_usage["usage_percent"])
         return swapped
 
     def get_stats(self) -> dict:

@@ -176,6 +176,11 @@ class MemFileSystem:
                 duration_ms=duration_ms,
             )
 
+        logger.debug(
+            "Read file: path=%s, size=%d, duration_ms=%.2f",
+            normalized_path, len(data), duration_ms
+        )
+
         self._track_access(normalized_path)
 
         return data
@@ -223,6 +228,11 @@ class MemFileSystem:
                 success=success,
             )
 
+        logger.debug(
+            "Write file: path=%s, size=%d, priority=%d, success=%s, duration_ms=%.2f",
+            normalized_path, len(data), priority, success, duration_ms
+        )
+
         return len(data)
 
     def delete(self, path: str) -> bool:
@@ -243,6 +253,11 @@ class MemFileSystem:
 
         if self.logger:
             self.logger.log(OperationType.DELETE, normalized_path, success=result)
+
+        logger.debug(
+            "Delete file: path=%s, success=%s",
+            normalized_path, result
+        )
 
         if result:
             directory, filename = self.directories.resolve_path(normalized_path)
@@ -353,6 +368,11 @@ class MemFileSystem:
                 success=result,
             )
 
+        logger.debug(
+            "Set priority: path=%s, priority=%d, success=%s",
+            normalized_path, priority, result
+        )
+
         return result
 
     def _set_priority_internal(self, path: str, priority: int) -> bool:
@@ -360,9 +380,11 @@ class MemFileSystem:
         normalized_path = self._normalize_path(path)
         with self._lock:
             if not self.storage.contains(normalized_path):
+                logger.debug("Set priority failed: path=%s, file not found", normalized_path)
                 return False
 
             self._file_priorities[normalized_path] = priority
+            logger.debug("Set priority internal: path=%s, priority=%d", normalized_path, priority)
             return self.storage.set_priority(normalized_path, priority)
 
     def get_priority(self, path: str) -> Optional[int]:
@@ -393,6 +415,8 @@ class MemFileSystem:
         normalized_path = self._normalize_path(path)
         if self.logger:
             self.logger.log(OperationType.PRELOAD, normalized_path, priority=priority)
+
+        logger.debug("Preload file: path=%s, priority=%d", normalized_path, priority)
 
         return self.storage.preload(normalized_path, priority)
 
@@ -431,6 +455,11 @@ class MemFileSystem:
         # Ensure in_memory field is always correct
         info["in_memory"] = location == "memory"
 
+        logger.debug(
+            "Get file info: path=%s, location=%s, in_memory=%s, priority=%s",
+            path, location, info["in_memory"], info.get("priority")
+        )
+
         return info
 
     def _track_access(self, path: str):
@@ -445,6 +474,21 @@ class MemFileSystem:
                     new_priority = min(current_priority + 1, 8)
                     self._file_priorities[path] = new_priority
                     self.storage.set_priority(path, new_priority)
+
+    def gc(self, target_usage: float = 0.5) -> int:
+        """
+        Trigger garbage collection.
+
+        Args:
+            target_usage: Target memory usage (0-1).
+
+        Returns:
+            Number of files swapped out.
+        """
+        logger.debug("GC started: target_usage=%.2f", target_usage)
+        swapped = self.storage.gc(target_usage)
+        logger.debug("GC completed: swapped=%d files", swapped)
+        return swapped
 
     def _log_operation(self, operation: OperationType, path: str, **kwargs):
         """Log an operation."""
