@@ -274,17 +274,20 @@ class MemFileSystem:
 
     def exists(self, path: str) -> bool:
         """
-        Check if file exists.
+        Check if file or directory exists.
 
         Args:
-            path: File path.
+            path: File or directory path.
 
         Returns:
             True if exists.
         """
 
         normalized_path = self._normalize_path(path)
-        return self.storage.contains(normalized_path)
+        # Check both files and directories
+        return self.storage.contains(normalized_path) or self.directories.exists(
+            normalized_path
+        )
 
     def mkdir(self, path: str) -> bool:
         """
@@ -602,6 +605,17 @@ class MemFileSystem:
         if not wait and pending > 0:
             # Background shutdown - tasks will complete asynchronously
             pass
+
+        # Clean up temp mode directory
+        if self._storage_mode == "temp" and hasattr(self, "_persist_path"):
+            import shutil
+
+            persist_path = self._persist_path
+            if persist_path and os.path.exists(persist_path):
+                try:
+                    shutil.rmtree(persist_path)
+                except Exception:
+                    pass  # Ignore cleanup errors
 
         return pending
 

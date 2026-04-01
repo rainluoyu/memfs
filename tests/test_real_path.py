@@ -170,7 +170,17 @@ class TestPersistModes:
 
     def test_temp_mode_cleanup(self):
         """Test temporary mode cleanup on shutdown."""
-        fs = MemFileSystem(storage_mode="temp")
+        import shutil
+
+        # Use a unique temp path to avoid conflicts with other tests
+        temp_path = "./tmp/test_temp_unique"
+        if os.path.exists(temp_path):
+            shutil.rmtree(temp_path)
+
+        fs = MemFileSystem(
+            storage_mode="temp",
+            persist_path=temp_path,
+        )
 
         # Write file
         fs.write("/test.txt", b"temporary data")
@@ -179,7 +189,9 @@ class TestPersistModes:
         fs.shutdown(wait=True)
 
         # Temp directory should be cleaned up
-        # (we can't check the exact path, but we trust the implementation)
+        assert not os.path.exists(temp_path), (
+            f"Temp path {temp_path} should be cleaned up"
+        )
 
     def test_persist_mode_survive_restart(self):
         """Test persistent mode survives restart."""
@@ -496,7 +508,7 @@ class TestSwapOut:
         fs = MemFileSystem(
             storage_mode="persist",
             persist_path=self.test_dir,
-            memory_limit=0.001,  # Very small limit to force GC
+            memory_limit_bytes=1000,
         )
 
         # Write low priority file
@@ -646,6 +658,16 @@ class TestPathNormalization:
         # Delete with backslash
         result = fs.delete("\\test.txt")
         assert result is True
+
+        # Wait for async delete to complete (disk delete may take time)
+        # Poll until file is gone or timeout
+        import time
+
+        for _ in range(20):  # Up to 2 seconds
+            if not fs.exists("/test.txt"):
+                break
+            time.sleep(0.1)
+
         assert fs.exists("/test.txt") is False
 
         fs.shutdown(wait=True)

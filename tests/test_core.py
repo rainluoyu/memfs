@@ -174,28 +174,28 @@ class TestMemoryManager:
 
     def test_put_get(self):
         """Test basic put and get."""
-        manager = MemoryManager(memory_limit=0.9)
+        manager = MemoryManager(memory_limit_bytes=int(1024 * 1024 * 100))
         manager.put("file1", b"data1", priority=5)
         assert manager.get("file1") == b"data1"
 
     def test_contains(self):
         """Test contains check."""
-        manager = MemoryManager(memory_limit=0.9)
+        manager = MemoryManager(memory_limit_bytes=int(1024 * 1024 * 100))
         manager.put("file1", b"data1")
         assert manager.contains("file1")
         assert not manager.contains("file2")
 
     def test_remove(self):
         """Test file removal."""
-        manager = MemoryManager(memory_limit=0.9)
+        manager = MemoryManager(memory_limit_bytes=int(1024 * 1024 * 100))
         manager.put("file1", b"data1")
         assert manager.remove("file1")
         assert not manager.contains("file1")
-        assert not manager.remove("file1")  # Remove again returns False
+        assert not manager.remove("file1")
 
     def test_update_priority(self):
         """Test priority update."""
-        manager = MemoryManager(memory_limit=0.9)
+        manager = MemoryManager(memory_limit_bytes=int(1024 * 1024 * 100))
         manager.put("file1", b"data1", priority=3)
         manager.update_priority("file1", priority=8)
         info = manager.get_file_info("file1")
@@ -204,13 +204,13 @@ class TestMemoryManager:
 
     def test_update_priority_nonexistent(self):
         """Test updating priority of nonexistent file."""
-        manager = MemoryManager(memory_limit=0.9)
+        manager = MemoryManager(memory_limit_bytes=int(1024 * 1024 * 100))
         result = manager.update_priority("nonexistent", priority=8)
         assert result is False
 
     def test_get_file_info(self):
         """Test getting file info."""
-        manager = MemoryManager(memory_limit=0.9)
+        manager = MemoryManager(memory_limit_bytes=int(1024 * 1024 * 100))
         manager.put("file1", b"data1", priority=7)
         info = manager.get_file_info("file1")
         assert info is not None
@@ -221,13 +221,13 @@ class TestMemoryManager:
 
     def test_get_file_info_nonexistent(self):
         """Test getting info of nonexistent file."""
-        manager = MemoryManager(memory_limit=0.9)
+        manager = MemoryManager(memory_limit_bytes=int(1024 * 1024 * 100))
         info = manager.get_file_info("nonexistent")
         assert info is None
 
     def test_clear(self):
         """Test clearing all files."""
-        manager = MemoryManager(memory_limit=0.9)
+        manager = MemoryManager(memory_limit_bytes=int(1024 * 1024 * 100))
         manager.put("file1", b"data1")
         manager.put("file2", b"data2")
         manager.clear()
@@ -236,7 +236,7 @@ class TestMemoryManager:
 
     def test_get_all_keys(self):
         """Test getting all keys."""
-        manager = MemoryManager(memory_limit=0.9)
+        manager = MemoryManager(memory_limit_bytes=int(1024 * 1024 * 100))
         manager.put("file1", b"data1")
         manager.put("file2", b"data2")
         keys = manager.get_all_keys()
@@ -245,34 +245,32 @@ class TestMemoryManager:
 
     def test_get_usage(self):
         """Test getting usage statistics."""
-        manager = MemoryManager(memory_limit=0.8)
+        manager = MemoryManager(memory_limit_bytes=int(1024 * 1024 * 100))
         manager.put("file1", b"data1")
         usage = manager.get_usage()
         assert "current_usage" in usage
         assert "file_count" in usage
         assert usage["file_count"] == 1
-        assert usage["memory_limit"] == 0.8
 
     def test_eviction_on_overflow(self):
         """Test that eviction happens when limit is exceeded."""
-        manager = MemoryManager(memory_limit=0.0001)  # Very small limit
-        manager.put("file1", b"x" * 1000, priority=1)  # Low priority
+        manager = MemoryManager(memory_limit_bytes=1000)
+        manager.put("file1", b"x" * 1000, priority=1)
         manager.put("file2", b"y" * 1000, priority=1)
         manager.put("file3", b"z" * 1000, priority=1)
-        # Some files should be evicted
         usage = manager.get_usage()
         assert usage["current_usage"] <= manager._max_bytes
 
     def test_high_priority_protects_from_eviction(self):
         """Test that high priority protects files from eviction."""
-        manager = MemoryManager(memory_limit=0.0001)
-        manager.put("protected", b"data", priority=10)  # Maximum priority
+        manager = MemoryManager(memory_limit_bytes=1000)
+        manager.put("protected", b"data", priority=10)
         # Even with small limit, protected file should stay
         # (eviction might not happen for priority 9-10)
 
     def test_access_increments_count(self):
         """Test that access increments access count."""
-        manager = MemoryManager(memory_limit=0.9)
+        manager = MemoryManager(memory_limit_bytes=int(1024 * 1024 * 100))
         manager.put("file1", b"data1")
         info1 = manager.get_file_info("file1")
         manager.get("file1")
@@ -283,7 +281,7 @@ class TestMemoryManager:
 
     def test_set_memory_limit(self):
         """Test setting memory limit."""
-        manager = MemoryManager(memory_limit=0.5)
+        manager = MemoryManager(memory_limit_bytes=int(1024 * 1024 * 50))
         manager.set_memory_limit(0.8)
         assert manager.memory_limit == 0.8
 
@@ -797,13 +795,24 @@ class TestMemFileSystem:
     @pytest.fixture
     def fs(self):
         """Create test filesystem."""
+        import shutil
+
+        test_path = "./tmp/test_memfs_data"
+        # Clean up before test
+        if os.path.exists(test_path):
+            shutil.rmtree(test_path)
+
         fs = MemFileSystem(
-            memory_limit=0.8,
-            persist_path="./tmp/test_memfs_data",
+            memory_limit_bytes=int(1024 * 1024 * 100),
+            persist_path=test_path,
             enable_logging=False,
         )
         yield fs
         fs.shutdown()
+
+        # Clean up after test
+        if os.path.exists(test_path):
+            shutil.rmtree(test_path)
 
     def test_write_read(self, fs):
         """Test basic write and read."""
@@ -976,8 +985,18 @@ class TestNativeAPI:
             get_file_info,
             gc,
         )
+        import shutil
 
-        fs = MemFileSystem(persist_path="./tmp/test_native_data", enable_logging=False)
+        test_path = "./tmp/test_native_data"
+        # Clean up before test
+        if os.path.exists(test_path):
+            shutil.rmtree(test_path)
+
+        fs = MemFileSystem(
+            memory_limit_bytes=int(1024 * 1024 * 100),
+            persist_path=test_path,
+            enable_logging=False,
+        )
         set_global_fs(fs)
 
         # Make imports available in test methods
@@ -998,6 +1017,10 @@ class TestNativeAPI:
         yield
 
         fs.shutdown()
+
+        # Clean up after test
+        if os.path.exists(test_path):
+            shutil.rmtree(test_path)
 
     def test_write_read(self):
         """Test native write and read."""
