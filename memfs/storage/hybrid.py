@@ -119,14 +119,22 @@ class HybridStorage:
             try:
                 evicted_keys = self.memory.put(key, data, priority)
 
-                self._file_locations[key] = "memory"
+                # Check if file is still in memory after eviction
+                file_in_memory = self.memory.contains(key)
+
+                # Update location based on actual state
+                if file_in_memory:
+                    self._file_locations[key] = "memory"
+                else:
+                    self._file_locations[key] = "real"
 
                 mtime = time.time()
                 size = len(data)
                 self._file_hashes[key] = (mtime, size)
                 self.real_storage.update_file_info(key, mtime, size)
 
-                self.priority_queue.put(key, data, priority, frequency=1, size=size)
+                if file_in_memory:
+                    self.priority_queue.put(key, data, priority, frequency=1, size=size)
 
                 self.tracker.record_access(key, is_write=True, size=size)
 
@@ -140,15 +148,47 @@ class HybridStorage:
                     ),
                 )
 
-                self._schedule_real_write(key, data, priority)
+                # If file was evicted or sync requested, write to disk synchronously
+                if not file_in_memory or sync:
+                    logger.debug(
+                        "Put: sync write for key=%s, file_in_memory=%s",
+                        key,
+                        file_in_memory,
+                    )
+                    # Mark as pending during sync write
+                    with self._lock:
+                        self._pending_ops[key] = "sync_write"
+                    try:
+                        self.real_storage.write_sync(key, data)
+                        if self._on_swap:
+                            self._on_swap(key, "write_real")
+                        # Ensure location is set correctly after sync write
+                        self._file_locations[key] = "real"
+                    finally:
+                        # Clean up pending op
+                        with self._lock:
+                            if (
+                                key in self._pending_ops
+                                and self._pending_ops[key] == "sync_write"
+                            ):
+                                del self._pending_ops[key]
+                    logger.debug("Put: sync write completed for key=%s", key)
+                else:
+                    # Schedule async write for files that remain in memory
+                    self._schedule_real_write(key, data, priority)
 
                 duration_ms = (time.time() - start_time) * 1000
                 self.stats.operations.record_write(duration_ms)
 
                 self.stats.record_cache_hit()
 
+                location = "real" if not file_in_memory else "memory"
                 logger.debug(
-                    "Put file: key=%s, priority=%d, location=memory", key, priority
+                    "Put file: key=%s, priority=%d, location=%s, evicted=%s",
+                    key,
+                    priority,
+                    location,
+                    len(evicted_keys) > 0,
                 )
                 return True
 
@@ -389,8 +429,11 @@ class HybridStorage:
 
     def _swap_in(self, key: str) -> Optional[bytes]:
         """Swap file from real path to memory."""
+        logger.debug("_swap_in started: key=%s", key)
+
         with self._lock:
             if key in self._pending_ops:
+                logger.debug("_swap_in: key in pending_ops, returning None")
                 return None
 
             self._pending_ops[key] = "swap_in"
@@ -399,10 +442,14 @@ class HybridStorage:
             self.lock_manager.acquire_read(key, timeout=None)
 
             try:
+                logger.debug("_swap_in: reading from disk...")
                 data = self.real_storage.read_sync(key)
 
                 if data is None:
+                    logger.debug("_swap_in: disk read returned None")
                     return None
+
+                logger.debug("_swap_in: disk read success, size=%d", len(data))
 
                 self.stats.record_swap_in()
 
@@ -411,10 +458,18 @@ class HybridStorage:
                 if file_info:
                     priority = file_info.get("priority", 5)
 
-                self.memory.put(key, data, priority)
+                logger.debug("_swap_in: putting into memory with priority=%d", priority)
+                evicted = self.memory.put(key, data, priority)
+                logger.debug(
+                    "_swap_in: memory.put completed, evicted=%s", len(evicted) > 0
+                )
 
                 with self._lock:
-                    self._file_locations[key] = "memory"
+                    # Update location based on actual state after potential eviction
+                    if self.memory.contains(key):
+                        self._file_locations[key] = "memory"
+                    else:
+                        self._file_locations[key] = "real"
                     if key in self._pending_ops:
                         del self._pending_ops[key]
 

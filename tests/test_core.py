@@ -1111,5 +1111,142 @@ class TestConcurrentAccess:
         fs.shutdown()
 
 
+# =============================================================================
+# Test Extreme Cases: File Size Exceeds Memory Limit
+# =============================================================================
+
+
+class TestExtremeMemoryCases:
+    """Tests for extreme cases where file size exceeds memory limit."""
+
+    def test_single_file_exceeds_memory_limit(self):
+        """Test writing a file larger than memory limit."""
+        limit_bytes = 1 * 1024 * 1024  # 1MB
+        fs = MemFileSystem(
+            memory_limit_bytes=limit_bytes, storage_mode="temp", enable_logging=False
+        )
+
+        # Write a 5MB file
+        large_data = b"x" * (5 * 1024 * 1024)
+        fs.write("/large_file.bin", large_data)
+
+        # File should exist
+        assert fs.exists("/large_file.bin"), "File should exist"
+
+        # Read the file back
+        read_data = fs.read("/large_file.bin")
+        assert len(read_data) == 5 * 1024 * 1024, (
+            f"Expected 5MB, got {len(read_data)} bytes"
+        )
+        assert read_data == large_data, "Data should match"
+
+        # File should be on disk (evicted from memory)
+        location = fs.storage.get_file_location("/large_file.bin")
+        assert location == "real", "Large file should be on disk"
+
+        fs.shutdown()
+
+    def test_memory_manager_eviction_self(self):
+        """Test MemoryManager eviction when single file exceeds limit."""
+        limit_bytes = 1 * 1024 * 1024  # 1MB
+        manager = MemoryManager(memory_limit_bytes=limit_bytes)
+
+        # Write a 5MB file
+        large_data = b"x" * (5 * 1024 * 1024)
+        evicted = manager.put("large_file", large_data)
+
+        # File should be evicted (possibly itself)
+        assert len(evicted) > 0, "Should evict at least one file"
+        assert not manager.contains("large_file"), "Large file should be evicted"
+
+        # Usage should be under limit
+        usage = manager.get_usage()
+        assert usage["current_usage"] <= limit_bytes, "Usage should be under limit"
+
+    def test_read_large_file_from_disk(self):
+        """Test reading a large file that exists on disk."""
+        limit_bytes = 512 * 1024  # 512KB
+        fs = MemFileSystem(
+            memory_limit_bytes=limit_bytes,
+            storage_mode="temp",
+            persist_path="./tmp/test_large_disk",
+            enable_logging=False,
+        )
+
+        # Write a 2MB file
+        large_data = b"y" * (2 * 1024 * 1024)
+        fs.write("/disk_file.bin", large_data)
+
+        # Force GC to swap out
+        swapped = fs.gc(target_usage=0.1)
+
+        # File should be on disk
+        location = fs.storage.get_file_location("/disk_file.bin")
+        assert location == "real", "File should be on disk after GC"
+
+        # Read the file
+        read_data = fs.read("/disk_file.bin")
+        assert len(read_data) == 2 * 1024 * 1024, (
+            f"Expected 2MB, got {len(read_data)} bytes"
+        )
+        assert read_data == large_data, "Data should match"
+
+        fs.shutdown()
+
+    def test_multiple_large_files(self):
+        """Test writing multiple large files."""
+        limit_bytes = 512 * 1024  # 512KB
+        fs = MemFileSystem(
+            memory_limit_bytes=limit_bytes,
+            storage_mode="temp",
+            persist_path="./tmp/test_multi_large",
+            enable_logging=False,
+        )
+
+        # Write three 1MB files
+        for i in range(3):
+            large_data = b"z" * (1 * 1024 * 1024)
+            fs.write(f"/large_{i}.bin", large_data)
+            assert fs.exists(f"/large_{i}.bin"), f"File {i} should exist"
+
+        # All files should be readable
+        for i in range(3):
+            read_data = fs.read(f"/large_{i}.bin")
+            assert len(read_data) == 1 * 1024 * 1024, f"File {i} should be 1MB"
+
+        fs.shutdown()
+
+    def test_small_and_large_file_mix(self):
+        """Test mixing small and large files."""
+        limit_bytes = 256 * 1024  # 256KB
+        fs = MemFileSystem(
+            memory_limit_bytes=limit_bytes,
+            storage_mode="temp",
+            persist_path="./tmp/test_mix",
+            enable_logging=False,
+        )
+
+        # Write small files (should stay in memory)
+        for i in range(5):
+            small_data = b"s" * (10 * 1024)  # 10KB each
+            fs.write(f"/small_{i}.bin", small_data)
+
+        # Write one large file (should evict some small files)
+        large_data = b"l" * (1 * 1024 * 1024)  # 1MB
+        fs.write("/large.bin", large_data)
+
+        # All files should be readable
+        assert fs.exists("/large.bin")
+        read_large = fs.read("/large.bin")
+        assert len(read_large) == 1 * 1024 * 1024
+
+        for i in range(5):
+            assert fs.exists(f"/small_{i}.bin")
+            read_small = fs.read(f"/small_{i}.bin")
+            assert len(read_small) == 10 * 1024
+
+        fs.shutdown()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])

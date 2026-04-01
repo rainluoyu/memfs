@@ -166,8 +166,9 @@ class MemoryManager:
                 evicted.append(victim)
 
                 if victim in self._files:
+                    victim_file = self._files[victim]
+                    victim_size = victim_file.size
                     del self._files[victim]
-                    victim_size = size
                     self._current_usage -= victim_size
 
             if evicted and self._on_eviction:
