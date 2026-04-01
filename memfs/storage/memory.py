@@ -48,18 +48,20 @@ class MemoryManager:
 
     def __init__(
         self,
-        memory_limit: float = 0.8,
+        memory_limit_bytes: Optional[int] = None,
+        memory_limit_percent: float = 0.8,
         on_eviction: Optional[Callable[[str], None]] = None,
     ):
         """
         Initialize memory manager.
 
         Args:
-            memory_limit: Memory usage limit as fraction of total (0-1).
+            memory_limit_bytes: Memory usage limit in bytes. If provided, takes precedence over memory_limit_percent.
+            memory_limit_percent: Memory usage limit as fraction of total (0-1). Default is 0.8 (80%).
             on_eviction: Callback when eviction is needed.
                         Signature: (file_key) -> None
         """
-        self.memory_limit = memory_limit
+        self.memory_limit_percent = memory_limit_percent
         self._on_eviction = on_eviction
 
         self._lock = threading.Lock()
@@ -68,7 +70,17 @@ class MemoryManager:
         self._peak_usage = 0
 
         self._total_system_memory = self._get_system_memory()
-        self._max_bytes = int(self._total_system_memory * memory_limit)
+
+        if memory_limit_bytes is not None:
+            self._max_bytes = memory_limit_bytes
+            self.memory_limit = (
+                memory_limit_bytes / self._total_system_memory
+                if self._total_system_memory > 0
+                else 0
+            )
+        else:
+            self._max_bytes = int(self._total_system_memory * memory_limit_percent)
+            self.memory_limit = memory_limit_percent
 
     @staticmethod
     def _get_system_memory() -> int:
@@ -290,7 +302,7 @@ class MemoryManager:
             10: 10.0,
         }.get(file.priority, 1.0)
 
-        recency = time.time() - file.last_accessed
+        recency = time.time() - (file.last_accessed or time.time())
         freq_factor = 1.0 / (file.access_count + 1)
 
         score = (1.0 / priority_weight) * freq_factor + (recency / 1000)

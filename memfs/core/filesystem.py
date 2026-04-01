@@ -30,7 +30,8 @@ class MemFileSystem:
 
     def __init__(
         self,
-        memory_limit: float = 0.8,
+        memory_limit_bytes: Optional[int] = None,
+        memory_limit_percent: float = 0.8,
         persist_path: str = "./memfs_data",
         storage_mode: str = "temp",
         worker_threads: int = 4,
@@ -42,7 +43,8 @@ class MemFileSystem:
         Initialize MemFileSystem.
 
         Args:
-            memory_limit: Memory usage limit (0-1).
+            memory_limit_bytes: Memory usage limit in bytes. If provided, takes precedence over memory_limit_percent.
+            memory_limit_percent: Memory usage limit as fraction of total (0-1). Default is 0.8 (80%).
             persist_path: Root path for real files.
             storage_mode: Storage mode - "temp" (temporary, cleanup on shutdown) or "persist" (keep files after shutdown).
             worker_threads: Number of background worker threads.
@@ -61,7 +63,8 @@ class MemFileSystem:
         self.directories = DirectoryManager()
 
         self.storage = HybridStorage(
-            memory_limit=memory_limit,
+            memory_limit_bytes=memory_limit_bytes,
+            memory_limit_percent=memory_limit_percent,
             persist_path=str(real_root),
             storage_mode=storage_mode,
             worker_threads=worker_threads,

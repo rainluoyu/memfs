@@ -31,7 +31,8 @@ class HybridStorage:
 
     def __init__(
         self,
-        memory_limit: float = 0.8,
+        memory_limit_bytes: Optional[int] = None,
+        memory_limit_percent: float = 0.8,
         persist_path: str = "./memfs_data",
         storage_mode: str = "temp",
         worker_threads: int = 4,
@@ -42,7 +43,8 @@ class HybridStorage:
         Initialize hybrid storage.
 
         Args:
-            memory_limit: Memory usage limit (0-1).
+            memory_limit_bytes: Memory usage limit in bytes. If provided, takes precedence over memory_limit_percent.
+            memory_limit_percent: Memory usage limit as fraction of total (0-1). Default is 0.8 (80%).
             persist_path: Root path for real files.
             storage_mode: Storage mode - "temp" (temporary, cleanup on shutdown) or "persist" (keep files after shutdown).
             worker_threads: Number of background worker threads.
@@ -55,7 +57,8 @@ class HybridStorage:
         self.persist_mode = storage_mode == "persist"
 
         self.memory = MemoryManager(
-            memory_limit=memory_limit,
+            memory_limit_bytes=memory_limit_bytes,
+            memory_limit_percent=memory_limit_percent,
             on_eviction=self._on_memory_eviction,
         )
 
@@ -144,7 +147,9 @@ class HybridStorage:
 
                 self.stats.record_cache_hit()
 
-                logger.debug("Put file: key=%s, priority=%d, location=memory", key, priority)
+                logger.debug(
+                    "Put file: key=%s, priority=%d, location=memory", key, priority
+                )
                 return True
 
             finally:
@@ -242,7 +247,13 @@ class HybridStorage:
         self.stats.operations.record_read(duration_ms)
 
         location = self._file_locations.get(key, "unknown")
-        logger.debug("Get file: key=%s, location=%s, size=%d, duration_ms=%.2f", key, location, len(data) if data else 0, duration_ms)
+        logger.debug(
+            "Get file: key=%s, location=%s, size=%d, duration_ms=%.2f",
+            key,
+            location,
+            len(data) if data else 0,
+            duration_ms,
+        )
 
         return data
 
@@ -284,7 +295,9 @@ class HybridStorage:
                     file_count=len(self._file_locations),
                 )
 
-                logger.debug("Remove file: key=%s, success=%s", key, removed_from_memory)
+                logger.debug(
+                    "Remove file: key=%s, success=%s", key, removed_from_memory
+                )
                 return removed_from_memory
 
             finally:
@@ -493,7 +506,11 @@ class HybridStorage:
         current = self.memory.get_usage()
         current_ratio = current["usage_percent"] / 100
 
-        logger.debug("GC started: current_usage=%.2f%%, target_usage=%.2f%%", current["usage_percent"], target_usage * 100)
+        logger.debug(
+            "GC started: current_usage=%.2f%%, target_usage=%.2f%%",
+            current["usage_percent"],
+            target_usage * 100,
+        )
 
         if current_ratio <= target_usage:
             logger.debug("GC skipped: current usage already below target")
@@ -521,7 +538,11 @@ class HybridStorage:
             if new_usage["usage_percent"] / 100 <= target_usage:
                 break
 
-        logger.debug("GC completed: swapped=%d files, new_usage=%.2f%%", swapped, new_usage["usage_percent"])
+        logger.debug(
+            "GC completed: swapped=%d files, new_usage=%.2f%%",
+            swapped,
+            new_usage["usage_percent"],
+        )
         return swapped
 
     def get_stats(self) -> dict:

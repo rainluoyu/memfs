@@ -82,7 +82,8 @@ class InstanceManager:
     def get_or_create_instance(
         self,
         persist_path: Optional[str] = None,
-        memory_limit: float = 0.8,
+        memory_limit_bytes: Optional[int] = None,
+        memory_limit_percent: float = 0.8,
         storage_mode: str = "temp",
         worker_threads: int = 4,
         enable_logging: bool = True,
@@ -102,7 +103,8 @@ class InstanceManager:
 
         Args:
             persist_path: Root path for real files. If None and storage_mode="temp", auto-generates unique path.
-            memory_limit: Memory usage limit (0-1).
+            memory_limit_bytes: Memory usage limit in bytes. If provided, takes precedence over memory_limit_percent.
+            memory_limit_percent: Memory usage limit as fraction of total (0-1). Default is 0.8 (80%).
             storage_mode: Storage mode - "temp" or "persist".
             worker_threads: Number of background worker threads.
             enable_logging: Whether to enable operation logging.
@@ -166,7 +168,8 @@ class InstanceManager:
                 return existing_fs
 
             config = {
-                "memory_limit": memory_limit,
+                "memory_limit_bytes": memory_limit_bytes,
+                "memory_limit_percent": memory_limit_percent,
                 "persist_path": persist_path,
                 "storage_mode": storage_mode,
                 "worker_threads": worker_threads,

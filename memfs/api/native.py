@@ -20,7 +20,8 @@ _global_fs_config: dict = {}
 
 
 def init(
-    memory_limit: float = 0.8,
+    memory_limit_bytes: Optional[int] = None,
+    memory_limit_percent: float = 0.8,
     persist_path: Optional[str] = None,
     storage_mode: str = "temp",
     worker_threads: int = 4,
@@ -40,7 +41,8 @@ def init(
     - Instance auto-shutdown when ref count reaches zero.
 
     Args:
-        memory_limit: Memory usage limit (0-1).
+        memory_limit_bytes: Memory usage limit in bytes. If provided, takes precedence over memory_limit_percent.
+        memory_limit_percent: Memory usage limit as fraction of total (0-1). Default is 0.8 (80%).
         persist_path: Root path for real files.
                       If None and storage_mode="temp", auto-generates unique path.
                       Required for storage_mode="persist".
@@ -83,7 +85,8 @@ def init(
     instance_manager = get_global_instance_manager()
     fs = instance_manager.get_or_create_instance(
         persist_path=persist_path,
-        memory_limit=memory_limit,
+        memory_limit_bytes=memory_limit_bytes,
+        memory_limit_percent=memory_limit_percent,
         storage_mode=storage_mode,
         worker_threads=worker_threads,
         enable_logging=enable_logging,
@@ -92,7 +95,8 @@ def init(
     )
     _global_fs = fs
     _global_fs_config = {
-        "memory_limit": memory_limit,
+        "memory_limit_bytes": memory_limit_bytes,
+        "memory_limit_percent": memory_limit_percent,
         "persist_path": persist_path,
         "storage_mode": storage_mode,
         "worker_threads": worker_threads,
