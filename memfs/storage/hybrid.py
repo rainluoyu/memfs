@@ -163,7 +163,12 @@ class HybridStorage:
                         if self._on_swap:
                             self._on_swap(key, "write_real")
                         # Ensure location is set correctly after sync write
-                        self._file_locations[key] = "real"
+                        # If file is in memory AND on disk -> "both"
+                        # If file is only on disk -> "real"
+                        if file_in_memory and self.memory.contains(key):
+                            self._file_locations[key] = "both"
+                        else:
+                            self._file_locations[key] = "real"
                     finally:
                         # Clean up pending op
                         with self._lock:
@@ -214,6 +219,10 @@ class HybridStorage:
                 with self._lock:
                     if key in self._pending_ops:
                         del self._pending_ops[key]
+                    # After async write completes, file is in both memory and disk
+                    # Update location from "memory" to "both"
+                    if key in self._file_locations:
+                        self._file_locations[key] = "both"
 
                 if self._on_swap:
                     self._on_swap(key, "write_real")
@@ -412,7 +421,8 @@ class HybridStorage:
             self.memory.put(key, data, priority)
 
             with self._lock:
-                self._file_locations[key] = "memory"
+                # File is now in memory and was already on disk -> "both"
+                self._file_locations[key] = "both"
                 mtime = time.time()
                 size = len(data)
                 self._file_hashes[key] = (mtime, size)
@@ -466,8 +476,11 @@ class HybridStorage:
 
                 with self._lock:
                     # Update location based on actual state after potential eviction
+                    # File was read from disk, so it's on disk
+                    # If it's also in memory now -> "both"
+                    # If it was immediately evicted -> "real"
                     if self.memory.contains(key):
-                        self._file_locations[key] = "memory"
+                        self._file_locations[key] = "both"
                     else:
                         self._file_locations[key] = "real"
                     if key in self._pending_ops:
@@ -632,7 +645,8 @@ class HybridStorage:
             key: File key.
 
         Returns:
-            'memory', 'real', or 'unknown'.
+            File location: 'memory' (only in RAM), 'real' (only on disk),
+            'both' (in both memory and disk), or 'unknown'.
         """
         with self._lock:
             if key in self._file_locations:

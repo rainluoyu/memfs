@@ -1248,5 +1248,155 @@ class TestExtremeMemoryCases:
         fs.shutdown()
 
 
+# =============================================================================
+# Test _file_locations Three-Value Logic (memory/real/both)
+# =============================================================================
+
+
+class TestFileLocationsThreeValue:
+    """Tests for _file_locations three-value logic."""
+
+    def test_file_location_both_after_async_write(self):
+        """Test file location becomes 'both' after async write completes."""
+        fs = MemFileSystem(
+            memory_limit_bytes=100 * 1024 * 1024,
+            storage_mode="temp",
+            persist_path="./tmp/test_both_async",
+            enable_logging=False,
+        )
+
+        # Write a small file (will stay in memory, async write to disk)
+        fs.write("/test.txt", b"hello world")
+
+        # Initially, file is only in memory
+        location = fs.storage.get_file_location("/test.txt")
+        assert location in ["memory", "both"], (
+            f"Expected 'memory' or 'both', got '{location}'"
+        )
+
+        # Wait for async write to complete
+        time.sleep(0.5)
+
+        # After async write, file should be in both memory and disk
+        location = fs.storage.get_file_location("/test.txt")
+        assert location == "both", f"Expected 'both', got '{location}'"
+
+        # Verify file is actually in both
+        assert fs.storage.memory.contains("/test.txt"), "File should be in memory"
+        assert fs.storage.real_storage.exists("/test.txt"), "File should be on disk"
+
+        fs.shutdown()
+
+    def test_file_location_real_after_eviction(self):
+        """Test file location becomes 'real' after eviction from memory."""
+        fs = MemFileSystem(
+            memory_limit_bytes=512 * 1024,
+            storage_mode="temp",
+            persist_path="./tmp/test_real_evict",
+            enable_logging=False,
+        )
+
+        # Write a 1MB file (will be evicted immediately)
+        large_data = b"x" * (1024 * 1024)
+        fs.write("/large.bin", large_data)
+
+        # File should be on disk only
+        location = fs.storage.get_file_location("/large.bin")
+        assert location == "real", f"Expected 'real', got '{location}'"
+        assert not fs.storage.memory.contains("/large.bin"), (
+            "File should not be in memory"
+        )
+        assert fs.storage.real_storage.exists("/large.bin"), "File should be on disk"
+
+        fs.shutdown()
+
+    def test_file_location_both_after_swap_in(self):
+        """Test file location becomes 'both' after swapping in from disk."""
+        fs = MemFileSystem(
+            memory_limit_bytes=100 * 1024 * 1024,
+            storage_mode="temp",
+            persist_path="./tmp/test_both_swap",
+            enable_logging=False,
+        )
+
+        # Write and let it settle to "both"
+        fs.write("/swap_test.txt", b"swap test data")
+        time.sleep(0.5)
+
+        # Force GC to swap out
+        fs.gc(target_usage=0.0)
+        time.sleep(0.5)
+
+        # File should be on disk only now
+        location = fs.storage.get_file_location("/swap_test.txt")
+        assert location == "real", f"Expected 'real' after GC, got '{location}'"
+
+        # Read the file (should swap in)
+        fs.read("/swap_test.txt")
+
+        # After swap-in, file should be in both
+        location = fs.storage.get_file_location("/swap_test.txt")
+        assert location == "both", f"Expected 'both' after swap-in, got '{location}'"
+
+        fs.shutdown()
+
+    def test_file_location_memory_only(self):
+        """Test file location stays 'memory' when disk write is not yet complete."""
+        fs = MemFileSystem(
+            memory_limit_bytes=100 * 1024 * 1024,
+            storage_mode="temp",
+            persist_path="./tmp/test_mem_only",
+            enable_logging=False,
+        )
+
+        # Write a file
+        fs.write("/memory_test.txt", b"memory test")
+
+        # Immediately check (before async write completes)
+        location = fs.storage.get_file_location("/memory_test.txt")
+
+        # Could be "memory" (before write) or "both" (if write completed quickly)
+        assert location in ["memory", "both"], (
+            f"Expected 'memory' or 'both', got '{location}'"
+        )
+
+        fs.shutdown()
+
+    def test_file_location_with_preload(self):
+        """Test file location after preload operation."""
+        fs = MemFileSystem(
+            memory_limit_bytes=100 * 1024 * 1024,
+            storage_mode="temp",
+            persist_path="./tmp/test_preload",
+            enable_logging=False,
+        )
+
+        # Write a file and let it settle
+        fs.write("/preload_test.txt", b"preload test data")
+        time.sleep(0.5)
+
+        # File should be in both
+        location = fs.storage.get_file_location("/preload_test.txt")
+        assert location == "both", f"Expected 'both', got '{location}'"
+
+        # Force GC to swap out
+        fs.gc(target_usage=0.0)
+        time.sleep(0.5)
+
+        # File should be on disk
+        location = fs.storage.get_file_location("/preload_test.txt")
+        assert location == "real", f"Expected 'real' after GC, got '{location}'"
+
+        # Preload the file
+        fs.preload("/preload_test.txt")
+        time.sleep(0.5)
+
+        # After preload, file should be in both
+        location = fs.storage.get_file_location("/preload_test.txt")
+        assert location == "both", f"Expected 'both' after preload, got '{location}'"
+
+        fs.shutdown()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])

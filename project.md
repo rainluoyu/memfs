@@ -190,7 +190,7 @@ import memfs  # memfs 的 debug 日志将自动输出到全局配置的目标
 
 ### 测试覆盖
 
-- **核心测试**：`tests/test_core.py` - 136 个测试用例，覆盖所有核心模块，包含 5 个极端内存情况测试
+- **核心测试**：`tests/test_core.py` - 141 个测试用例，覆盖所有核心模块，包含 5 个极端内存情况测试和 5 个三值位置逻辑测试
 - **RealPath 测试**：`tests/test_real_path.py` - 21 个测试用例，包含持久化存储、文件锁、异步操作、持久化模式 listdir、临时模式路径安全检查测试
 - **多实例测试**：`tests/test_multi_instance.py` - 18 个测试用例，覆盖实例管理器、实例隔离、生命周期管理、引用计数、多数据集场景
 - **测试框架**：pytest
@@ -201,15 +201,32 @@ import memfs  # memfs 的 debug 日志将自动输出到全局配置的目标
   - 从磁盘读取大文件
   - 多个大文件并发
   - 大小文件混合场景
+- **三值位置逻辑测试**：
+  - 异步写入后位置为 "both"
+  - 驱逐后位置为 "real"
+  - 换入后位置为 "both"
+  - 仅内存情况的位置
+  - 预加载后位置为 "both"
 
 ---
 
 **最后更新**：2026-04-01  
-**版本**：0.2.9
+**版本**：0.3.0
 
 ---
 
 ## 更新日志
+
+### v0.3.0 (2026-04-01)
+- 实现 `_file_locations` 三值逻辑：`memory`（仅在内存）、`real`（仅在磁盘）、`both`（同时在内存和磁盘）
+- 修改 `HybridStorage.put()`：文件写入后初始为 "memory"，异步刷盘完成后更新为 "both"
+- 修改 `HybridStorage._schedule_real_write()`：异步写入完成后将位置更新为 "both"
+- 修改 `HybridStorage._swap_in()`：从磁盘读入内存后设置为 "both"（因为磁盘上已有）
+- 修改 `HybridStorage.preload()`：预加载后设置为 "both"
+- 修改 `HybridStorage._swap_out_async()`：换出后更新为 "real"
+- 更新 `get_file_location()` 文档说明三值含义
+- 新增 5 个单元测试验证三值逻辑正确性
+- 更准确反映文件真实位置，减少编码混淆
 
 ### v0.2.9 (2026-04-01)
 - 修复极端情况下文件丢失的 Bug：当单个文件大于内存限制时
