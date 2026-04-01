@@ -639,9 +639,16 @@ class MemFileSystem:
         self.shutdown()
 
     def __del__(self):
-        """Destructor."""
-        if not self._closed:
-            self.shutdown(wait=False)
+        """Destructor.
+
+        Safely handles partially initialized objects where __init__ may have failed.
+        Only attempts shutdown if the object was fully initialized.
+        """
+        # Check if object was fully initialized
+        if hasattr(self, "_closed") and not self._closed:
+            # Only shutdown if storage was initialized
+            if hasattr(self, "storage"):
+                self.shutdown(wait=False)
 
     def get_stats(self) -> dict:
         """
